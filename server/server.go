@@ -275,6 +275,24 @@ func handlePlans(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(newPlan)
 		return
 	}
+	if r.Method == http.MethodPut {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "Missing id", http.StatusBadRequest)
+			return
+		}
+		var update store.Plan
+		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := globalStore.UpdatePlan(id, update); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	if r.Method == http.MethodDelete {
 		id := r.URL.Query().Get("id")
 		if id == "" {

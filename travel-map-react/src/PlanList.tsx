@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Layout, List, Card, Button, Input, Modal, Typography, Popconfirm, Spin, Empty } from 'antd';
-import { PlusOutlined, DeleteOutlined, RightOutlined } from '@ant-design/icons';
+import { Layout, List, Card, Button, Input, Modal, Typography, Popconfirm, Spin, Empty, Form, InputNumber } from 'antd';
+import { PlusOutlined, DeleteOutlined, RightOutlined, EditOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { api } from './api';
 import type { Plan } from './api';
@@ -14,6 +14,11 @@ export default function PlanList() {
     const [loading, setLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
     const [newPlanName, setNewPlanName] = useState('');
+    
+    // Editing state
+    const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editForm] = Form.useForm();
 
     useEffect(() => {
         loadPlans();
@@ -22,7 +27,33 @@ export default function PlanList() {
     const loadPlans = async () => {
         try {
             const data = await api.getPlans();
-            setPlans(data || []);
+            // Sort by order if present, otherwise by created_at desc (newest first)
+            // Wait, requirement: default by created time. If order set, by order.
+            // Let's implement robust sorting:
+            // 1. Filter plans with order > 0 and order = 0 (or undefined)
+            // 2. Sort "ordered" plans by order ascending.
+            // 3. Sort "unordered" plans by created_at descending (or ascending? usually newest first is better)
+            // 4. Combine: ordered first, then unordered? Or how?
+            // "如果设置了序号，则按序号排序" implies precedence.
+            // Let's assume order > 0 means "pinned" or "ordered". 0 means default.
+            // We sort by: Order (asc, non-zero), then CreatedAt (desc/asc).
+            // Actually, usually users want custom ordered items at top.
+            
+            const sorted = (data || []).sort((a, b) => {
+                const orderA = a.order || 0;
+                const orderB = b.order || 0;
+                
+                if (orderA !== 0 && orderB !== 0) {
+                    return orderA - orderB;
+                }
+                if (orderA !== 0) return -1; // A has order, comes first
+                if (orderB !== 0) return 1;  // B has order, comes first
+                
+                // Both 0, sort by created_at descending (newest first)
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            });
+            
+            setPlans(sorted);
         } catch (e) {
             console.error("Failed to load plans", e);
         } finally {
@@ -34,7 +65,8 @@ export default function PlanList() {
         if (!newPlanName) return;
         try {
             const plan = await api.createPlan(newPlanName);
-            setPlans([...plans, plan]);
+            // Reload to resort
+            loadPlans();
             setIsCreating(false);
             setNewPlanName('');
             navigate(`/plan/${plan.id}`);
@@ -49,6 +81,26 @@ export default function PlanList() {
             setPlans(plans.filter(p => p.id !== id));
         } catch (e) {
             console.error("Failed to delete plan", e);
+        }
+    };
+
+    const handleEdit = (plan: Plan) => {
+        setEditingPlan(plan);
+        editForm.setFieldsValue(plan);
+        setIsEditModalOpen(true);
+    };
+
+    const handleUpdate = async () => {
+        try {
+            const values = await editForm.validateFields();
+            if (editingPlan) {
+                await api.updatePlan(editingPlan.id, values);
+                setIsEditModalOpen(false);
+                setEditingPlan(null);
+                loadPlans();
+            }
+        } catch (e) {
+            console.error("Failed to update plan", e);
         }
     };
 
@@ -77,6 +129,7 @@ export default function PlanList() {
                                 <Card
                                     hoverable
                                     actions={[
+                                        <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(item)}>编辑</Button>,
                                         <Popconfirm title="确定删除该计划吗?" onConfirm={() => handleDelete(item.id)} okText="是" cancelText="否">
                                             <Button type="text" danger icon={<DeleteOutlined />}>删除</Button>
                                         </Popconfirm>,
@@ -86,7 +139,12 @@ export default function PlanList() {
                                     ]}
                                 >
                                     <Card.Meta
-                                        title={<span style={{ fontSize: '1.2em' }}>{item.name}</span>}
+                                        title={
+                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                <span style={{ fontSize: '1.2em' }}>{item.name}</span>
+                                                {item.order && item.order > 0 ? <span style={{ fontSize: '0.8em', color: '#999' }}>序号: {item.order}</span> : null}
+                                            </div>
+                                        }
                                         description={`创建时间: ${new Date(item.created_at).toLocaleString()}`}
                                     />
                                 </Card>
@@ -109,6 +167,24 @@ export default function PlanList() {
                         onChange={(e) => setNewPlanName(e.target.value)}
                         onPressEnter={handleCreate}
                     />
+                </Modal>
+
+                <Modal
+                    title="编辑计划"
+                    open={isEditModalOpen}
+                    onOk={handleUpdate}
+                    onCancel={() => setIsEditModalOpen(false)}
+                    okText="保存"
+                    cancelText="取消"
+                >
+                    <Form form={editForm} layout="vertical">
+                        <Form.Item name="name" label="计划名称" rules={[{ required: true }]}>
+                            <Input />
+                        </Form.Item>
+                        <Form.Item name="order" label="序号 (越小越靠前，0表示默认)">
+                            <InputNumber min={0} style={{ width: '100%' }} />
+                        </Form.Item>
+                    </Form>
                 </Modal>
             </Content>
             <Footer style={{ textAlign: 'center' }}>旅游地图助手 ©{new Date().getFullYear()}</Footer>

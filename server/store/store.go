@@ -171,21 +171,21 @@ func (s *GlobalStore) UpdatePlan(id string, update Plan) error {
 			// Since we only added Order, let's look at frontend.
 			// We can just overwrite the plan with new data if we pass the full plan.
 			// Or simple approach: Just save the list with modifications.
-			
+
 			// Actually, to support partial updates properly without pointers for primitives (int), it's tricky.
 			// But for Order, let's assume we want to update it.
 			// Let's change UpdatePlan to take the FULL modified plan list or just modify the specific plan in memory and save.
 			// The caller `server.go` will handle unmarshaling.
 			// Let's make this method simple: Update the specific plan with ID.
-			
+
 			// Re-approach: Let's trust the input `update` contains the values we want to set.
 			// If Order is 0, maybe we mean 0.
-			plans[i].Order = update.Order 
+			plans[i].Order = update.Order
 			// Name is always present?
 			if update.Name != "" {
 				plans[i].Name = update.Name
 			}
-			
+
 			return s.SavePlans(plans)
 		}
 	}
