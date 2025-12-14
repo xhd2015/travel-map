@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Card, Table, Button, Form, Input, Popconfirm, Space } from 'antd';
 import { PlusOutlined, EditOutlined, SaveOutlined, CloseOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { Route as RouteType } from '../api';
@@ -47,8 +47,36 @@ export const RouteListSection = ({ routes, onSave }: RouteListSectionProps) => {
     const [form] = Form.useForm();
     const [editingKey, setEditingKey] = useState('');
     const [newRowId, setNewRowId] = useState<string | null>(null);
+    const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
+    const hasInitializedRef = useRef(false);
 
     const isEditing = (record: RouteType) => record.id === editingKey;
+
+    useEffect(() => {
+        if (routes.length > 0 && !hasInitializedRef.current) {
+            setExpandedRowKeys(routes.map(r => r.id));
+            hasInitializedRef.current = true;
+        }
+    }, [routes]);
+
+    const routesWithButtons = useMemo(() => {
+        return routes.map(route => ({
+            ...route,
+            children: [
+                ...(route.children || []),
+                {
+                    id: `add-btn-${route.id}`,
+                    isAddButton: true,
+                    parentId: route.id,
+                    name: '',
+                    time: '',
+                    duration: '',
+                    spots: [],
+                    story: ''
+                } as any
+            ]
+        }));
+    }, [routes]);
 
     const edit = (record: RouteType) => {
         form.setFieldsValue({ ...record });
@@ -60,8 +88,43 @@ export const RouteListSection = ({ routes, onSave }: RouteListSectionProps) => {
         }
     };
 
+    // Recursive helpers
+    const deleteNode = (data: RouteType[], key: string): RouteType[] => {
+        return data.filter(item => {
+            if (item.id === key) return false;
+            if (item.children) {
+                item.children = deleteNode(item.children, key);
+            }
+            return true;
+        });
+    };
+
+    const updateNode = (data: RouteType[], key: string, newProps: Partial<RouteType>): RouteType[] => {
+        return data.map(item => {
+            if (item.id === key) {
+                return { ...item, ...newProps };
+            }
+            if (item.children) {
+                return { ...item, children: updateNode(item.children, key, newProps) };
+            }
+            return item;
+        });
+    };
+
+    const addChildNode = (data: RouteType[], parentId: string, newChild: RouteType): RouteType[] => {
+        return data.map(item => {
+            if (item.id === parentId) {
+                return { ...item, children: [...(item.children || []), newChild] };
+            }
+            if (item.children) {
+                return { ...item, children: addChildNode(item.children, parentId, newChild) };
+            }
+            return item;
+        });
+    };
+
     const handleDelete = (key: string) => {
-        const newData = routes.filter((item) => item.id !== key);
+        const newData = deleteNode([...routes], key);
         onSave(newData);
         if (key === newRowId) {
             setNewRowId(null);
@@ -79,17 +142,10 @@ export const RouteListSection = ({ routes, onSave }: RouteListSectionProps) => {
     const save = async (key: string) => {
         try {
             const row = (await form.validateFields()) as RouteType;
-            const newData = [...routes];
-            const index = newData.findIndex((item) => key === item.id);
-
-            if (index > -1) {
-                const item = newData[index];
-                // preserve spots if any (though currently empty)
-                newData.splice(index, 1, { ...item, ...row });
-                onSave(newData);
-                setEditingKey('');
-                setNewRowId(null);
-            }
+            const newData = updateNode([...routes], key, row);
+            onSave(newData);
+            setEditingKey('');
+            setNewRowId(null);
         } catch (errInfo) {
             console.log('Validate Failed:', errInfo);
         }
@@ -99,11 +155,12 @@ export const RouteListSection = ({ routes, onSave }: RouteListSectionProps) => {
         const newKey = Date.now().toString();
         const newRoute: RouteType = {
             id: newKey,
-            name: '',
+            name: '新线路',
             time: '',
             spots: [],
             duration: '',
             story: '',
+            children: []
         };
         onSave([...routes, newRoute]);
         setEditingKey(newKey);
@@ -111,16 +168,59 @@ export const RouteListSection = ({ routes, onSave }: RouteListSectionProps) => {
         form.setFieldsValue(newRoute);
     };
 
+    const handleAddChild = (parentId: string) => {
+        const newKey = Date.now().toString();
+        const newRoute: RouteType = {
+            id: newKey,
+            name: '新时间段',
+            time: '',
+            spots: [],
+            duration: '',
+            story: '',
+        };
+        const newData = addChildNode([...routes], parentId, newRoute);
+        onSave(newData);
+        setEditingKey(newKey);
+        setNewRowId(newKey);
+        form.setFieldsValue(newRoute);
+        setExpandedRowKeys(prev => {
+            if (!prev.includes(parentId)) return [...prev, parentId];
+            return prev;
+        });
+    };
+
     const columns = [
-        { title: '名称', dataIndex: 'name', key: 'name', width: '20%', editable: true },
-        { title: '时间', dataIndex: 'time', key: 'time', width: '15%', editable: true },
-        { title: '耗时', dataIndex: 'duration', key: 'duration', width: '15%', editable: true },
-        { title: '典故', dataIndex: 'story', key: 'story', width: '30%', editable: true },
+        {
+            title: '行程/地点',
+            dataIndex: 'name',
+            key: 'name',
+            width: '30%',
+            editable: true,
+            render: (text: string, record: any) => {
+                if (record.isAddButton) {
+                    return (
+                        <Button
+                            type="dashed"
+                            size="small"
+                            onClick={() => handleAddChild(record.parentId)}
+                            block
+                            icon={<PlusOutlined />}
+                        >
+                            增加行程
+                        </Button>
+                    );
+                }
+                return text;
+            }
+        },
+        { title: '时间', dataIndex: 'time', key: 'time', width: '25%', editable: true },
+        { title: '耗时', dataIndex: 'duration', key: 'duration', width: '20%', editable: true },
         {
             title: '操作',
             dataIndex: 'operation',
-            width: '20%',
-            render: (_: any, record: RouteType) => {
+            width: '25%',
+            render: (_: any, record: any) => {
+                if (record.isAddButton) return null;
                 const editable = isEditing(record);
                 return editable ? (
                     <Space>
@@ -147,17 +247,29 @@ export const RouteListSection = ({ routes, onSave }: RouteListSectionProps) => {
 
     const mergedColumns = columns.map((col) => {
         if (!col.editable) {
-            return col;
+            return {
+                ...col,
+                onCell: (record: any) => {
+                    if (record.isAddButton) return { colSpan: 0 };
+                    return {};
+                }
+            };
         }
         return {
             ...col,
-            onCell: (record: RouteType) => ({
-                record,
-                inputType: 'text',
-                dataIndex: col.dataIndex,
-                title: col.title,
-                editing: isEditing(record),
-            }),
+            onCell: (record: any) => {
+                if (record.isAddButton) {
+                    if (col.dataIndex === 'name') return { colSpan: 4 };
+                    return { colSpan: 0 };
+                }
+                return {
+                    record,
+                    inputType: 'text',
+                    dataIndex: col.dataIndex,
+                    title: col.title,
+                    editing: isEditing(record),
+                };
+            },
         };
     });
 
@@ -171,11 +283,15 @@ export const RouteListSection = ({ routes, onSave }: RouteListSectionProps) => {
                         },
                     }}
                     bordered
-                    dataSource={routes}
+                    dataSource={routesWithButtons}
                     columns={mergedColumns}
                     rowClassName="editable-row"
                     pagination={false}
                     rowKey="id"
+                    expandable={{
+                        expandedRowKeys: expandedRowKeys,
+                        onExpandedRowsChange: (keys) => setExpandedRowKeys(keys as React.Key[]),
+                    }}
                     footer={() => (
                         <Button type="dashed" onClick={handleAdd} block icon={<PlusOutlined />}>
                             添加线路

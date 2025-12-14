@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Card, Table, Button, Form, Input, Popconfirm, Space, Select, Tag, Popover } from 'antd';
-import { PlusOutlined, EditOutlined, SaveOutlined, CloseOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Form, Input, Popconfirm, Space, Select, Tag, Popover, Tooltip } from 'antd';
+import { PlusOutlined, EditOutlined, SaveOutlined, CloseOutlined, DeleteOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import type { Spot } from '../api';
 
 interface SpotListSectionProps {
@@ -59,6 +59,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
 const ReservationDetails = ({ record, onSave }: { record: Spot, onSave: (val: string) => void }) => {
     const [visible, setVisible] = useState(false);
     const [text, setText] = useState(record.reservation_info || '');
+    const [editing, setEditing] = useState(false);
 
     useEffect(() => {
         setText(record.reservation_info || '');
@@ -66,27 +67,51 @@ const ReservationDetails = ({ record, onSave }: { record: Spot, onSave: (val: st
 
     const handleSave = () => {
         onSave(text);
-        setVisible(false);
+        setEditing(false);
+    };
+
+    const handleCancel = () => {
+        setText(record.reservation_info || '');
+        setEditing(false);
     };
 
     return (
         <Popover
             content={
                 <div style={{ width: 300 }}>
-                    <Input.TextArea
-                        value={text}
-                        onChange={e => setText(e.target.value)}
-                        autoSize={{ minRows: 3, maxRows: 6 }}
-                    />
-                    <div style={{ marginTop: 8, textAlign: 'right' }}>
-                        <Button size="small" type="primary" onClick={handleSave}>保存</Button>
-                    </div>
+                    {editing ? (
+                        <>
+                            <Input.TextArea
+                                value={text}
+                                onChange={e => setText(e.target.value)}
+                                autoSize={{ minRows: 3, maxRows: 6 }}
+                            />
+                            <div style={{ marginTop: 8, textAlign: 'right' }}>
+                                <Space>
+                                    <Button size="small" onClick={handleCancel}>取消</Button>
+                                    <Button size="small" type="primary" onClick={handleSave}>保存</Button>
+                                </Space>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div style={{ marginBottom: 8, whiteSpace: 'pre-wrap', minHeight: '20px' }}>
+                                {text || <span style={{ color: '#ccc' }}>暂无预约信息</span>}
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                                <Button size="small" type="link" onClick={() => setEditing(true)}>编辑</Button>
+                            </div>
+                        </>
+                    )}
                 </div>
             }
             title="预约详情"
             trigger="click"
             open={visible}
-            onOpenChange={setVisible}
+            onOpenChange={(v) => {
+                setVisible(v);
+                if (!v) setEditing(false);
+            }}
         >
             <Button size="small" type="link">详情</Button>
         </Popover>
@@ -162,6 +187,7 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
             id: newKey,
             name: '',
             time: '',
+            website: '',
             interior: '',
             story: '',
             reservation_required: false,
@@ -177,9 +203,17 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
 
     const columns = [
         { title: '名称', dataIndex: 'name', key: 'name', width: '15%', editable: true },
-        { title: '时间', dataIndex: 'time', key: 'time', width: '10%', editable: true },
-        { title: '内部', dataIndex: 'interior', key: 'interior', width: '15%', editable: true },
+        { title: '开放时间', dataIndex: 'time', key: 'time', width: '10%', editable: true },
+        { title: '介绍', dataIndex: 'interior', key: 'interior', width: '15%', editable: true },
         { title: '典故', dataIndex: 'story', key: 'story', width: '30%', editable: true },
+        {
+            title: '官网',
+            dataIndex: 'website',
+            key: 'website',
+            width: '10%',
+            editable: true,
+            render: (text: string) => text ? <a href={text} target="_blank" rel="noopener noreferrer">链接</a> : '-'
+        },
         {
             title: '需预约',
             dataIndex: 'reservation_required',
@@ -243,8 +277,25 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
         };
     });
 
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const yyyy = tomorrow.getFullYear();
+    const mm = tomorrow.getMonth() + 1;
+    const dd = tomorrow.getDate();
+    const dateStr = `${yyyy}年${mm}月${dd}日`;
+    const tooltipText = `使用Deepseek，提示词: 我将于${dateStr}，从九江自驾到景德镇，请列出景德镇的“此生必去”景点，按重要性排序，给出一个表格，包含：景点名，开放时间范围，是否需要预约，预约方式，游玩方式（步行，观光车，缆车），游玩花费时间`;
+
+    const title = (
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span>景点列表</span>
+            <Tooltip title={tooltipText}>
+                <QuestionCircleOutlined style={{ marginLeft: 8, color: '#999', cursor: 'pointer' }} />
+            </Tooltip>
+        </div>
+    );
+
     return (
-        <Card title="景点列表" bordered={false}>
+        <Card title={title} bordered={false}>
             <Form form={form} component={false}>
                 <Table
                     components={{

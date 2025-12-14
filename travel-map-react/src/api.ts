@@ -17,6 +17,7 @@ export interface Spot {
     lng?: number;
     icon?: string;
     hide_in_list?: boolean;
+    website?: string;
 }
 
 export interface Route {
@@ -26,6 +27,7 @@ export interface Route {
     spots: string[];
     duration: string;
     story: string;
+    children?: Route[];
 }
 
 export interface Question {
@@ -148,5 +150,17 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(images),
         });
+    },
+    uploadGuideImage: async (planId: string, file: File): Promise<string> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('planId', planId);
+        const res = await fetch(`${API_BASE}/upload-guide-image`, {
+            method: 'POST',
+            body: formData,
+        });
+        if (!res.ok) throw new Error('Failed to upload image');
+        const data = await res.json();
+        return data.url;
     },
 };

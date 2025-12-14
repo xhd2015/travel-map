@@ -233,6 +233,9 @@ func RegisterAPI(mux *http.ServeMux) error {
 		fmt.Printf("Warning: Failed to ensure data directory: %v\n", err)
 	}
 
+	// Serve user data
+	mux.Handle("/data/", http.StripPrefix("/data/", http.FileServer(http.Dir(globalStore.Dir))))
+
 	// API endpoints
 	mux.HandleFunc("/api/plans", handlePlans)
 	mux.HandleFunc("/api/spots", handleSpots)
@@ -240,6 +243,7 @@ func RegisterAPI(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/questions", handleQuestions)
 	mux.HandleFunc("/api/config", handleConfig)
 	mux.HandleFunc("/api/guide-images", handleGuideImages)
+	mux.HandleFunc("/api/upload-guide-image", handleUploadGuideImage)
 	mux.HandleFunc("/ping", handlePing)
 
 	return nil
@@ -470,6 +474,68 @@ func handleGuideImages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func handleUploadGuideImage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Limit upload size (e.g. 10MB)
+	r.ParseMultipartForm(10 << 20)
+
+	file, handler, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Error retrieving file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	planID := r.FormValue("planId")
+	if planID == "" {
+		http.Error(w, "Missing planId", http.StatusBadRequest)
+		return
+	}
+
+	planStore := globalStore.GetPlanStore(planID)
+	if err := planStore.EnsureDir(); err != nil {
+		http.Error(w, "Failed to ensure plan directory", http.StatusInternalServerError)
+		return
+	}
+
+	// Create images directory if not exists
+	imagesDir := filepath.Join(planStore.Dir, "images")
+	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		http.Error(w, "Failed to create images directory", http.StatusInternalServerError)
+		return
+	}
+
+	// Generate a unique filename to avoid collisions
+	filename := fmt.Sprintf("%d-%s", time.Now().UnixMilli(), handler.Filename)
+	// Sanitize filename
+	filename = strings.ReplaceAll(filename, " ", "_")
+	dstPath := filepath.Join(imagesDir, filename)
+
+	dst, err := os.Create(dstPath)
+	if err != nil {
+		http.Error(w, "Failed to create destination file", http.StatusInternalServerError)
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		return
+	}
+
+	// Construct URL
+	// Serving from /data/{planId}/images/{filename}
+	url := fmt.Sprintf("/data/plans/%s/images/%s", planID, filename)
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"url": url,
+	})
 }
 
 // mimeTypeHandler wraps an http.Handler and sets proper MIME types

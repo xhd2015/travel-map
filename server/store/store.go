@@ -27,6 +27,7 @@ type Spot struct {
 	Lng                 float64 `json:"lng"`
 	Icon                string  `json:"icon"`         // default, flag, star, etc.
 	HideInList          bool    `json:"hide_in_list"` // 是否在列表中隐藏
+	Website             string  `json:"website"`      // 官网
 }
 
 type Route struct {
@@ -36,6 +37,7 @@ type Route struct {
 	Spots    []string `json:"spots"`
 	Duration string   `json:"duration"` // 耗时
 	Story    string   `json:"story"`
+	Children []Route  `json:"children,omitempty"`
 }
 
 type Question struct {

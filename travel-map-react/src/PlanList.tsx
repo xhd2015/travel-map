@@ -14,7 +14,7 @@ export default function PlanList() {
     const [loading, setLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
     const [newPlanName, setNewPlanName] = useState('');
-    
+
     // Editing state
     const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -38,21 +38,21 @@ export default function PlanList() {
             // Let's assume order > 0 means "pinned" or "ordered". 0 means default.
             // We sort by: Order (asc, non-zero), then CreatedAt (desc/asc).
             // Actually, usually users want custom ordered items at top.
-            
+
             const sorted = (data || []).sort((a, b) => {
                 const orderA = a.order || 0;
                 const orderB = b.order || 0;
-                
+
                 if (orderA !== 0 && orderB !== 0) {
                     return orderA - orderB;
                 }
                 if (orderA !== 0) return -1; // A has order, comes first
                 if (orderB !== 0) return 1;  // B has order, comes first
-                
+
                 // Both 0, sort by created_at descending (newest first)
                 return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
             });
-            
+
             setPlans(sorted);
         } catch (e) {
             console.error("Failed to load plans", e);

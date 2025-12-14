@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Card, Button, Modal, Input, message, Select, Spin, Space } from 'antd';
-import { EditOutlined, ExpandOutlined, FlagOutlined } from '@ant-design/icons';
+import { ExpandOutlined, FlagOutlined } from '@ant-design/icons';
 import L from 'leaflet';
 import { useNavigate } from 'react-router-dom';
 import type { Config, Spot, Destination, MapState } from '../api';
@@ -31,8 +31,6 @@ interface MapSectionProps {
 
 export const MapSection = ({ planId, config, spots, onSaveConfig, onSaveSpots }: MapSectionProps) => {
     const navigate = useNavigate();
-    const [isEditing, setIsEditing] = useState(false);
-    const [url, setUrl] = useState(config.map_image);
     const [isAddingSpot, setIsAddingSpot] = useState(false);
     const [newSpotName, setNewSpotName] = useState('');
     // Temp coords for adding spot via modal
@@ -63,11 +61,6 @@ export const MapSection = ({ planId, config, spots, onSaveConfig, onSaveSpots }:
             setMapZoom(13); // Default zoom if no map_state
         }
     }, [config]);
-
-    const handleSaveConfig = () => {
-        onSaveConfig({ ...config, map_image: url });
-        setIsEditing(false);
-    };
 
     // Handler for MapViewer's onAddSpot
     const handleAddSpotRequest = (lat: number, lng: number) => {
@@ -215,7 +208,6 @@ export const MapSection = ({ planId, config, spots, onSaveConfig, onSaveSpots }:
             extra={
                 <Space>
                     <Button icon={<ExpandOutlined />} onClick={() => navigate(`/plan/${planId}/map`)}>详情</Button>
-                    <Button icon={<EditOutlined />} onClick={() => setIsEditing(true)}>编辑链接</Button>
                 </Space>
             }
             bordered={false}
@@ -254,21 +246,6 @@ export const MapSection = ({ planId, config, spots, onSaveConfig, onSaveSpots }:
                     style={{ height: '100%', width: '100%' }}
                 />
             </div>
-
-            <Modal
-                title="编辑地图链接 (暂未使用)"
-                open={isEditing}
-                onOk={handleSaveConfig}
-                onCancel={() => setIsEditing(false)}
-                okText="保存"
-                cancelText="取消"
-            >
-                <Input
-                    placeholder="图片 URL"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                />
-            </Modal>
 
             <Modal
                 title="添加景点"
