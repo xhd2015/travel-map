@@ -2,15 +2,17 @@ import { useEffect, useState } from 'react';
 import { Layout, Typography, Spin, Space, Button } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { api } from './api';
-import type { Spot, Route as RouteType, Question, Config, GuideImage } from './api';
+import type { Spot, Route as RouteType, Question, Reference, Food, Config, GuideImage } from './api';
 import './App.css';
 import { useParams, useNavigate } from 'react-router-dom';
 
 import { MapSection } from './components/MapSection';
 import { GuideMapSection } from './components/GuideMapSection';
 import { SpotListSection } from './components/SpotListSection';
+import { FoodListSection } from './components/FoodListSection';
 import { RouteListSection } from './components/RouteListSection';
 import { QuestionListSection } from './components/QuestionListSection';
+import { ReferenceListSection } from './components/ReferenceListSection';
 
 const { Header, Content, Footer } = Layout;
 const { Title } = Typography;
@@ -20,8 +22,10 @@ function PlanDetail() {
   const navigate = useNavigate();
 
   const [spots, setSpots] = useState<Spot[]>([]);
+  const [foods, setFoods] = useState<Food[]>([]);
   const [routes, setRoutes] = useState<RouteType[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [references, setReferences] = useState<Reference[]>([]);
   const [config, setConfig] = useState<Config>({ map_image: '' });
   const [guideImages, setGuideImages] = useState<GuideImage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,16 +38,20 @@ function PlanDetail() {
 
   const loadData = async (id: string) => {
     try {
-      const [s, r, q, c, g] = await Promise.all([
+      const [s, f, r, q, ref, c, g] = await Promise.all([
         api.getSpots(id),
+        api.getFoods(id),
         api.getRoutes(id),
         api.getQuestions(id),
+        api.getReferences(id),
         api.getConfig(id),
         api.getGuideImages(id),
       ]);
       setSpots(s || []);
+      setFoods(f || []);
       setRoutes(r || []);
       setQuestions(q || []);
+      setReferences(ref || []);
       setConfig(c || { map_image: '' });
       setGuideImages(g || []);
     } catch (e) {
@@ -88,6 +96,11 @@ function PlanDetail() {
             api.saveSpots(planId, s);
           }} />
 
+          <FoodListSection foods={foods} onSave={(f) => {
+            setFoods(f);
+            api.saveFoods(planId, f);
+          }} />
+
           <RouteListSection routes={routes} onSave={(r) => {
             setRoutes(r);
             api.saveRoutes(planId, r);
@@ -96,6 +109,11 @@ function PlanDetail() {
           <QuestionListSection questions={questions} onSave={(q) => {
             setQuestions(q);
             api.saveQuestions(planId, q);
+          }} />
+
+          <ReferenceListSection references={references} onSave={(r) => {
+            setReferences(r);
+            api.saveReferences(planId, r);
           }} />
         </Space>
       </Content>

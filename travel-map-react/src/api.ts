@@ -18,6 +18,21 @@ export interface Spot {
     icon?: string;
     hide_in_list?: boolean;
     website?: string;
+    rating?: number;
+}
+
+export interface Food {
+    id: string;
+    name: string;
+    time: string;
+    type: string;
+    rating?: number;
+    comment: string;
+    reservation_required?: boolean;
+    reservation_info?: string;
+    lat?: number;
+    lng?: number;
+    website?: string;
 }
 
 export interface Route {
@@ -34,6 +49,12 @@ export interface Question {
     id: string;
     question: string;
     answer: string;
+}
+
+export interface Reference {
+    id: string;
+    description: string;
+    link: string;
 }
 
 export interface Config {
@@ -103,6 +124,18 @@ export const api = {
             body: JSON.stringify(spots),
         });
     },
+    getFoods: async (planId: string): Promise<Food[]> => {
+        const res = await fetch(`${API_BASE}/foods?planId=${planId}`);
+        if (!res.ok) throw new Error('Failed to fetch foods');
+        return res.json();
+    },
+    saveFoods: async (planId: string, foods: Food[]) => {
+        await fetch(`${API_BASE}/foods?planId=${planId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(foods),
+        });
+    },
     getRoutes: async (planId: string): Promise<Route[]> => {
         const res = await fetch(`${API_BASE}/routes?planId=${planId}`);
         if (!res.ok) throw new Error('Failed to fetch routes');
@@ -125,6 +158,18 @@ export const api = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(questions),
+        });
+    },
+    getReferences: async (planId: string): Promise<Reference[]> => {
+        const res = await fetch(`${API_BASE}/references?planId=${planId}`);
+        if (!res.ok) throw new Error('Failed to fetch references');
+        return res.json();
+    },
+    saveReferences: async (planId: string, references: Reference[]) => {
+        await fetch(`${API_BASE}/references?planId=${planId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(references),
         });
     },
     getConfig: async (planId: string): Promise<Config> => {

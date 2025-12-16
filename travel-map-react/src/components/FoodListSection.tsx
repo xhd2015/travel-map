@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Card, Table, Button, Form, Input, Popconfirm, Space, Select, Tag, Popover, Tooltip, Rate } from 'antd';
-import { PlusOutlined, EditOutlined, SaveOutlined, CloseOutlined, DeleteOutlined, QuestionCircleOutlined } from '@ant-design/icons';
-import type { Spot } from '../api';
+import { Card, Table, Button, Form, Input, Popconfirm, Space, Select, Tag, Popover, Rate } from 'antd';
+import { PlusOutlined, EditOutlined, SaveOutlined, CloseOutlined, DeleteOutlined } from '@ant-design/icons';
+import type { Food } from '../api';
 
-interface SpotListSectionProps {
-    spots: Spot[];
-    onSave: (s: Spot[]) => void;
+interface FoodListSectionProps {
+    foods: Food[];
+    onSave: (f: Food[]) => void;
 }
 
 interface EditableCellProps extends React.HTMLAttributes<HTMLElement> {
@@ -13,7 +13,7 @@ interface EditableCellProps extends React.HTMLAttributes<HTMLElement> {
     dataIndex: string;
     title: string;
     inputType: 'text' | 'boolean' | 'rate';
-    record: Spot;
+    record: Food;
     index: number;
     children: React.ReactNode;
 }
@@ -36,7 +36,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
         );
     } else if (inputType === 'rate') {
         inputNode = <Rate />;
-    } else if (dataIndex === 'story' || dataIndex === 'reservation_info') {
+    } else if (dataIndex === 'comment' || dataIndex === 'reservation_info') {
         inputNode = <Input.TextArea autoSize />;
     }
 
@@ -58,7 +58,7 @@ const EditableCell: React.FC<EditableCellProps> = ({
     );
 };
 
-const ReservationDetails = ({ record, onSave }: { record: Spot, onSave: (val: string) => void }) => {
+const ReservationDetails = ({ record, onSave }: { record: Food, onSave: (val: string) => void }) => {
     const [visible, setVisible] = useState(false);
     const [text, setText] = useState(record.reservation_info || '');
     const [editing, setEditing] = useState(false);
@@ -120,14 +120,14 @@ const ReservationDetails = ({ record, onSave }: { record: Spot, onSave: (val: st
     );
 };
 
-export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
+export const FoodListSection = ({ foods, onSave }: FoodListSectionProps) => {
     const [form] = Form.useForm();
     const [editingKey, setEditingKey] = useState('');
     const [newRowId, setNewRowId] = useState<string | null>(null);
 
-    const isEditing = (record: Spot) => record.id === editingKey;
+    const isEditing = (record: Food) => record.id === editingKey;
 
-    const edit = (record: Spot) => {
+    const edit = (record: Food) => {
         form.setFieldsValue({
             ...record,
             reservation_required: record.reservation_required ?? false
@@ -141,7 +141,7 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
     };
 
     const handleDelete = (key: string) => {
-        const newData = spots.filter((item) => item.id !== key);
+        const newData = foods.filter((item) => item.id !== key);
         onSave(newData);
         if (key === newRowId) {
             setNewRowId(null);
@@ -158,8 +158,8 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
 
     const save = async (key: string) => {
         try {
-            const row = (await form.validateFields()) as Spot;
-            const newData = [...spots];
+            const row = (await form.validateFields()) as Food;
+            const newData = [...foods];
             const index = newData.findIndex((item) => key === item.id);
 
             if (index > -1) {
@@ -175,7 +175,7 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
     };
 
     const handleUpdateReservationInfo = (id: string, info: string) => {
-        const newData = [...spots];
+        const newData = [...foods];
         const index = newData.findIndex((item) => id === item.id);
         if (index > -1) {
             newData[index] = { ...newData[index], reservation_info: info };
@@ -185,22 +185,23 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
 
     const handleAdd = () => {
         const newKey = Date.now().toString();
-        const newSpot: Spot = {
+        const newFood: Food = {
             id: newKey,
             name: '',
             time: '',
-            website: '',
-            interior: '',
-            story: '',
+            type: '',
+            rating: 0,
+            comment: '',
             reservation_required: false,
             reservation_info: '',
+            website: '',
         };
         // Add to list immediately
-        onSave([...spots, newSpot]);
+        onSave([...foods, newFood]);
         // Set as editing
         setEditingKey(newKey);
         setNewRowId(newKey);
-        form.setFieldsValue(newSpot);
+        form.setFieldsValue(newFood);
     };
 
     const columns = [
@@ -213,9 +214,9 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
             editable: true,
             render: (rating: number) => <Rate disabled defaultValue={rating} style={{ minWidth: 150 }} />
         },
-        { title: '开放时间', dataIndex: 'time', key: 'time', width: '10%', editable: true },
-        { title: '介绍', dataIndex: 'interior', key: 'interior', width: '15%', editable: true },
-        { title: '典故', dataIndex: 'story', key: 'story', width: '30%', editable: true },
+        { title: '菜系/类型', dataIndex: 'type', key: 'type', width: '10%', editable: true },
+        { title: '营业时间', dataIndex: 'time', key: 'time', width: '10%', editable: true },
+        { title: '评价/推荐菜', dataIndex: 'comment', key: 'comment', width: '25%', editable: true },
         {
             title: '官网',
             dataIndex: 'website',
@@ -228,9 +229,9 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
             title: '需预约',
             dataIndex: 'reservation_required',
             key: 'reservation_required',
-            width: '12%',
+            width: '10%',
             editable: true,
-            render: (val: boolean, record: Spot) => (
+            render: (val: boolean, record: Food) => (
                 <Space>
                     {val ? <Tag color="red">是</Tag> : <Tag color="green">否</Tag>}
                     {val && (
@@ -245,8 +246,8 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
         {
             title: '操作',
             dataIndex: 'operation',
-            width: '12%',
-            render: (_: any, record: Spot) => {
+            width: '10%',
+            render: (_: any, record: Food) => {
                 const editable = isEditing(record);
                 return editable ? (
                     <Space>
@@ -277,7 +278,7 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
         }
         return {
             ...col,
-            onCell: (record: Spot) => ({
+            onCell: (record: Food) => ({
                 record,
                 inputType: col.dataIndex === 'reservation_required' ? 'boolean' : (col.dataIndex === 'rating' ? 'rate' : 'text'),
                 dataIndex: col.dataIndex,
@@ -287,25 +288,8 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
         };
     });
 
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const yyyy = tomorrow.getFullYear();
-    const mm = tomorrow.getMonth() + 1;
-    const dd = tomorrow.getDate();
-    const dateStr = `${yyyy}年${mm}月${dd}日`;
-    const tooltipText = `使用Deepseek，提示词: 我将于${dateStr}，从九江自驾到景德镇，请列出景德镇的“此生必去”景点，按重要性排序，给出一个表格，包含：景点名，开放时间范围，是否需要预约，预约方式，游玩方式（步行，观光车，缆车），游玩花费时间`;
-
-    const title = (
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-            <span>景点列表</span>
-            <Tooltip title={tooltipText}>
-                <QuestionCircleOutlined style={{ marginLeft: 8, color: '#999', cursor: 'pointer' }} />
-            </Tooltip>
-        </div>
-    );
-
     return (
-        <Card title={title} bordered={false}>
+        <Card title="美食列表" bordered={false}>
             <Form form={form} component={false}>
                 <Table
                     components={{
@@ -314,14 +298,14 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
                         },
                     }}
                     bordered
-                    dataSource={spots.filter(s => !s.hide_in_list)}
+                    dataSource={foods}
                     columns={mergedColumns}
                     rowClassName="editable-row"
                     pagination={false}
                     rowKey="id"
                     footer={() => (
                         <Button type="dashed" onClick={handleAdd} block icon={<PlusOutlined />}>
-                            添加景点
+                            添加美食
                         </Button>
                     )}
                 />
@@ -334,3 +318,4 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
 const TypographyLink = ({ children, ...props }: any) => (
     <a {...props} style={{ cursor: 'pointer', ...props.style }}>{children}</a>
 );
+

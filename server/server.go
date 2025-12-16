@@ -239,8 +239,10 @@ func RegisterAPI(mux *http.ServeMux) error {
 	// API endpoints
 	mux.HandleFunc("/api/plans", handlePlans)
 	mux.HandleFunc("/api/spots", handleSpots)
+	mux.HandleFunc("/api/foods", handleFoods)
 	mux.HandleFunc("/api/routes", handleRoutes)
 	mux.HandleFunc("/api/questions", handleQuestions)
+	mux.HandleFunc("/api/references", handleReferences)
 	mux.HandleFunc("/api/config", handleConfig)
 	mux.HandleFunc("/api/guide-images", handleGuideImages)
 	mux.HandleFunc("/api/upload-guide-image", handleUploadGuideImage)
@@ -352,6 +354,37 @@ func handleSpots(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
 
+func handleFoods(w http.ResponseWriter, r *http.Request) {
+	s, err := getPlanStore(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if r.Method == http.MethodGet {
+		foods, err := s.LoadFoods()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(foods)
+		return
+	}
+	if r.Method == http.MethodPost {
+		var foods []store.Food
+		if err := json.NewDecoder(r.Body).Decode(&foods); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := s.SaveFoods(foods); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
 func handleRoutes(w http.ResponseWriter, r *http.Request) {
 	s, err := getPlanStore(r)
 	if err != nil {
@@ -405,6 +438,37 @@ func handleQuestions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.SaveQuestions(questions); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func handleReferences(w http.ResponseWriter, r *http.Request) {
+	s, err := getPlanStore(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if r.Method == http.MethodGet {
+		references, err := s.LoadReferences()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(references)
+		return
+	}
+	if r.Method == http.MethodPost {
+		var references []store.Reference
+		if err := json.NewDecoder(r.Body).Decode(&references); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := s.SaveReferences(references); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

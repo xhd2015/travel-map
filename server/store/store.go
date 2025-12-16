@@ -28,6 +28,21 @@ type Spot struct {
 	Icon                string  `json:"icon"`         // default, flag, star, etc.
 	HideInList          bool    `json:"hide_in_list"` // 是否在列表中隐藏
 	Website             string  `json:"website"`      // 官网
+	Rating              int     `json:"rating"`       // 星级 1-5
+}
+
+type Food struct {
+	ID                  string  `json:"id"`
+	Name                string  `json:"name"`
+	Time                string  `json:"time"`
+	Type                string  `json:"type"`                 // 菜系/类型
+	Rating              int     `json:"rating"`               // 星级 1-5
+	Comment             string  `json:"comment"`              // 评价/推荐菜
+	ReservationRequired bool    `json:"reservation_required"` // 需预约
+	ReservationInfo     string  `json:"reservation_info"`     // 预约信息
+	Lat                 float64 `json:"lat"`
+	Lng                 float64 `json:"lng"`
+	Website             string  `json:"website"` // 官网
 }
 
 type Route struct {
@@ -44,6 +59,12 @@ type Question struct {
 	ID       string `json:"id"`
 	Question string `json:"question"`
 	Answer   string `json:"answer"`
+}
+
+type Reference struct {
+	ID          string `json:"id"`
+	Description string `json:"description"`
+	Link        string `json:"link"`
 }
 
 type Config struct {
@@ -270,6 +291,19 @@ func (s *PlanStore) SaveSpots(spots []Spot) error {
 	return s.saveFile("spots.json", spots)
 }
 
+func (s *PlanStore) LoadFoods() ([]Food, error) {
+	var foods []Food
+	err := s.loadFile("foods.json", &foods)
+	if foods == nil {
+		foods = []Food{}
+	}
+	return foods, err
+}
+
+func (s *PlanStore) SaveFoods(foods []Food) error {
+	return s.saveFile("foods.json", foods)
+}
+
 func (s *PlanStore) LoadRoutes() ([]Route, error) {
 	var routes []Route
 	err := s.loadFile("routes.json", &routes)
@@ -294,6 +328,19 @@ func (s *PlanStore) LoadQuestions() ([]Question, error) {
 
 func (s *PlanStore) SaveQuestions(questions []Question) error {
 	return s.saveFile("questions.json", questions)
+}
+
+func (s *PlanStore) LoadReferences() ([]Reference, error) {
+	var references []Reference
+	err := s.loadFile("references.json", &references)
+	if references == nil {
+		references = []Reference{}
+	}
+	return references, err
+}
+
+func (s *PlanStore) SaveReferences(references []Reference) error {
+	return s.saveFile("references.json", references)
 }
 
 func (s *PlanStore) LoadConfig() (Config, error) {
