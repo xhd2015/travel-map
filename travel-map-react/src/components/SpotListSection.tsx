@@ -296,7 +296,7 @@ export const SpotListSection = ({ spots, onSave, destinationName }: SpotListSect
     const dd = tomorrow.getDate();
     const dateStr = `${yyyy}年${mm}月${dd}日`;
     const dest = destinationName || '目的地';
-    const tooltipText = `使用Deepseek，提示词: 我将于${dateStr}，在${dest}旅游，请列出${dest}的“此生必去”景点，按重要性排序，给出一个表格，包含：景点名，开放时间范围，是否需要预约，预约方式，游玩方式（步行，观光车，缆车），游玩花费时间`;
+    const tooltipText = `使用Deepseek，提示词: 我将于${dateStr}，在${dest}旅游，请列出${dest}的“此生必去”景点，按重要性排序，给出一个表格，包含：景点名，开放时间范围，该景点游玩的意义，历史和典故，是否需要预约，预约方式，游玩方式（步行，观光车，缆车），游玩花费时间`;
 
     const title = (
         <div style={{ display: 'flex', alignItems: 'center' }}>

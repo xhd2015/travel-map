@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Card, Button, Form, Input, List, Space, Popconfirm } from 'antd';
-import { PlusOutlined, EditOutlined, SaveOutlined, CloseOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
+import { Card, Button, Form, Input, List, Space, Popconfirm, Tooltip } from 'antd';
+import { PlusOutlined, EditOutlined, SaveOutlined, CloseOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import type { Schedule } from '../api';
@@ -91,8 +91,17 @@ export const ScheduleListSection = ({ schedules, onSave }: ScheduleListSectionPr
         onSave(newData);
     };
 
+    const title = (
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span>计划</span>
+            <Tooltip title="先搜索景点，再确定导览图，最后确定行程表">
+                <QuestionCircleOutlined style={{ marginLeft: 8, color: '#999', cursor: 'pointer' }} />
+            </Tooltip>
+        </div>
+    );
+
     return (
-        <Card title="计划" bordered={false}>
+        <Card title={title} bordered={false}>
             <Form form={form} component={false}>
                 <List
                     itemLayout="vertical"

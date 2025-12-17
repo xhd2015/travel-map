@@ -87,6 +87,13 @@ export const SpotEditModal: React.FC<SpotEditModalProps> = ({ open, spot, onOk, 
                     <Select>
                         <Select.Option value="">默认 (Default)</Select.Option>
                         <Select.Option value="flag">旗帜 (Flag)</Select.Option>
+                        <Select.OptGroup label="序号 (Numbered)">
+                            {Array.from({ length: 20 }, (_, i) => i + 1).map(num => (
+                                <Select.Option key={num} value={`number-${num}`}>
+                                    {num}
+                                </Select.Option>
+                            ))}
+                        </Select.OptGroup>
                     </Select>
                 </Form.Item>
                 <Form.Item

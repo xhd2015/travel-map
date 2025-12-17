@@ -1,14 +1,15 @@
 import React from 'react';
-import { Card, Button } from 'antd';
+import { Card, Button, Input } from 'antd';
 import { FlagOutlined } from '@ant-design/icons';
 import type { Config } from '../../api';
 
 interface DestinationOverlayProps {
     config: Config;
     onLocate: () => void;
+    onSearch?: (value: string) => void;
 }
 
-export const DestinationOverlay: React.FC<DestinationOverlayProps> = ({ config, onLocate }) => {
+export const DestinationOverlay: React.FC<DestinationOverlayProps> = ({ config, onLocate, onSearch }) => {
     if (!config.destination) return null;
 
     return (
@@ -20,10 +21,11 @@ export const DestinationOverlay: React.FC<DestinationOverlayProps> = ({ config, 
                 left: '50%',
                 transform: 'translateX(-50%)',
                 zIndex: 1000,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                minWidth: 300
             }}
         >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: onSearch ? 8 : 0 }}>
                 <FlagOutlined style={{ color: '#1890ff' }} />
                 <span style={{ fontWeight: 'bold' }}>目的地: {config.destination.name}</span>
                 <Button
@@ -34,6 +36,14 @@ export const DestinationOverlay: React.FC<DestinationOverlayProps> = ({ config, 
                     定位
                 </Button>
             </div>
+            {onSearch && (
+                <Input.Search
+                    placeholder="在范围内搜索..."
+                    onSearch={onSearch}
+                    size="small"
+                    enterButton
+                />
+            )}
         </Card>
     );
 };

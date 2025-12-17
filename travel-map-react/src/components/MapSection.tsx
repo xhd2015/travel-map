@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Card, Button, Modal, Input, message, Select, Spin, Space } from 'antd';
+import { Card, Button, message, Select, Spin, Space } from 'antd';
 import { ExpandOutlined, FlagOutlined } from '@ant-design/icons';
 import L from 'leaflet';
 import { useNavigate } from 'react-router-dom';
@@ -7,6 +7,7 @@ import type { Config, Spot, Destination, MapState } from '../api';
 import { MapViewer } from './PlanMap/MapViewer';
 import { SpotEditModal } from './PlanMap/SpotEditModal';
 import { DestinationEditModal } from './PlanMap/DestinationEditModal';
+import { SpotAddModal } from './PlanMap/SpotAddModal';
 
 // Fix leaflet marker icons (ensure loaded)
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -32,7 +33,6 @@ interface MapSectionProps {
 export const MapSection = ({ planId, config, spots, onSaveConfig, onSaveSpots }: MapSectionProps) => {
     const navigate = useNavigate();
     const [isAddingSpot, setIsAddingSpot] = useState(false);
-    const [newSpotName, setNewSpotName] = useState('');
     // Temp coords for adding spot via modal
     const [tempLatLng, setTempLatLng] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -66,14 +66,13 @@ export const MapSection = ({ planId, config, spots, onSaveConfig, onSaveSpots }:
     const handleAddSpotRequest = (lat: number, lng: number) => {
         setTempLatLng({ lat, lng });
         setIsAddingSpot(true);
-        setNewSpotName('');
     };
 
-    const handleAddSpotConfirm = () => {
-        if (tempLatLng && newSpotName) {
+    const handleAddSpotConfirm = (name: string) => {
+        if (tempLatLng && name) {
             const newSpot: Spot = {
                 id: Date.now().toString(),
-                name: newSpotName,
+                name: name,
                 time: '',
                 interior: '',
                 story: '',
@@ -202,9 +201,15 @@ export const MapSection = ({ planId, config, spots, onSaveConfig, onSaveSpots }:
         setMapZoom(13);
     };
 
+    const title = (
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span>地图</span>
+        </div>
+    );
+
     return (
         <Card
-            title="地图"
+            title={title}
             extra={
                 <Space>
                     <Button icon={<ExpandOutlined />} onClick={() => navigate(`/plan/${planId}/map`)}>详情</Button>
@@ -241,27 +246,18 @@ export const MapSection = ({ planId, config, spots, onSaveConfig, onSaveSpots }:
                     onMarkLocation={handleMarkLocation}
                     onEditSpot={handleEditSpot}
                     onDeleteSpot={handleDeleteSpot}
+                    onUpdateSpot={handleSaveEditSpot}
                     onSetDestination={handleSetDestination}
                     showDestinationOverlay={false}
                     style={{ height: '100%', width: '100%' }}
                 />
             </div>
 
-            <Modal
-                title="添加景点"
+            <SpotAddModal
                 open={isAddingSpot}
                 onOk={handleAddSpotConfirm}
                 onCancel={() => setIsAddingSpot(false)}
-                okText="添加"
-                cancelText="取消"
-            >
-                <Input
-                    placeholder="景点名称"
-                    value={newSpotName}
-                    onChange={(e) => setNewSpotName(e.target.value)}
-                    onPressEnter={handleAddSpotConfirm}
-                />
-            </Modal>
+            />
 
             <SpotEditModal
                 open={isEditModalOpen}

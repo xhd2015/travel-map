@@ -9,6 +9,7 @@ import { PlanMapSidebar } from './components/PlanMap/PlanMapSidebar';
 import { MapViewer } from './components/PlanMap/MapViewer';
 import { SpotEditModal } from './components/PlanMap/SpotEditModal';
 import { DestinationEditModal } from './components/PlanMap/DestinationEditModal';
+import { SpotAddModal } from './components/PlanMap/SpotAddModal';
 
 // Fix leaflet marker icons
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -37,6 +38,10 @@ export default function PlanMap() {
     // Editing state
     const [editingSpot, setEditingSpot] = useState<Spot | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+    // Adding spot state
+    const [isAddingSpot, setIsAddingSpot] = useState(false);
+    const [tempLatLng, setTempLatLng] = useState<{ lat: number; lng: number } | null>(null);
 
     // Destination editing state
     const [isDestinationModalOpen, setIsDestinationModalOpen] = useState(false);
@@ -123,23 +128,32 @@ export default function PlanMap() {
         }
     };
 
-    const handleAddSpot = (lat: number, lng: number) => {
-        if (!planId) return;
-        const name = prompt("请输入景点名称");
-        if (name) {
-            const newSpot: Spot = {
-                id: Date.now().toString(),
-                name: name,
-                time: '',
-                interior: '',
-                story: '',
-                lat: lat,
-                lng: lng,
-            };
-            const newSpots = [...spots, newSpot];
-            setSpots(newSpots);
+    const handleAddSpotRequest = (lat: number, lng: number) => {
+        setTempLatLng({ lat, lng });
+        setIsAddingSpot(true);
+    };
+
+    const handleAddSpotConfirm = (name: string) => {
+        if (!planId || !tempLatLng) return;
+
+        const newSpot: Spot = {
+            id: Date.now().toString(),
+            name: name,
+            time: '',
+            interior: '',
+            story: '',
+            lat: tempLatLng.lat,
+            lng: tempLatLng.lng,
+        };
+
+        setSpots(prev => {
+            const newSpots = [...prev, newSpot];
             api.saveSpots(planId, newSpots);
-        }
+            return newSpots;
+        });
+
+        setIsAddingSpot(false);
+        setTempLatLng(null);
     };
 
     const handleMarkLocation = (lat: number, lng: number) => {
@@ -155,9 +169,11 @@ export default function PlanMap() {
             icon: 'flag',
             hide_in_list: true,
         };
-        const newSpots = [...spots, newSpot];
-        setSpots(newSpots);
-        api.saveSpots(planId, newSpots);
+        setSpots(prev => {
+            const newSpots = [...prev, newSpot];
+            api.saveSpots(planId, newSpots);
+            return newSpots;
+        });
         message.success("已标记位置");
     };
 
@@ -168,18 +184,22 @@ export default function PlanMap() {
 
     const handleSaveSpot = (updatedSpot: Spot) => {
         if (!planId) return;
-        const newSpots = spots.map(s => s.id === updatedSpot.id ? updatedSpot : s);
-        setSpots(newSpots);
-        api.saveSpots(planId, newSpots);
+        setSpots(prev => {
+            const newSpots = prev.map(s => s.id === updatedSpot.id ? updatedSpot : s);
+            api.saveSpots(planId, newSpots);
+            return newSpots;
+        });
         setIsEditModalOpen(false);
         setEditingSpot(null);
     };
 
     const handleDeleteSpot = (spot: Spot) => {
         if (!planId) return;
-        const newSpots = spots.filter(s => s.id !== spot.id);
-        setSpots(newSpots);
-        api.saveSpots(planId, newSpots);
+        setSpots(prev => {
+            const newSpots = prev.filter(s => s.id !== spot.id);
+            api.saveSpots(planId, newSpots);
+            return newSpots;
+        });
         setIsEditModalOpen(false);
         setEditingSpot(null);
         message.success("已删除地点");
@@ -259,16 +279,24 @@ export default function PlanMap() {
                     mapCenter={mapCenter}
                     mapZoom={mapZoom}
                     spots={spots}
-                    onAddSpot={handleAddSpot}
+                    onAddSpot={handleAddSpotRequest}
                     onMarkLocation={handleMarkLocation}
                     onEditSpot={handleEditSpot}
                     onDeleteSpot={handleDeleteSpot}
+                    onUpdateSpot={handleSaveSpot}
                     onSetDestination={handleSetDestination}
                     onLocateDestination={handleLocateDestination}
                     showDestinationOverlay={true}
                     style={{ height: '100%', width: '100%' }}
                 />
             </Content>
+
+            <SpotAddModal
+                open={isAddingSpot}
+                onOk={handleAddSpotConfirm}
+                onCancel={() => setIsAddingSpot(false)}
+            />
+
             <SpotEditModal
                 open={isEditModalOpen}
                 spot={editingSpot}
