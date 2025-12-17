@@ -21,6 +21,7 @@ type Spot struct {
 	Time                string  `json:"time"`
 	Interior            string  `json:"interior"`             // 内部
 	Story               string  `json:"story"`                // 典故
+	PlayTime            string  `json:"play_time"`            // 游玩时长
 	ReservationRequired bool    `json:"reservation_required"` // 需预约
 	ReservationInfo     string  `json:"reservation_info"`     // 预约信息
 	Lat                 float64 `json:"lat"`
@@ -32,17 +33,18 @@ type Spot struct {
 }
 
 type Food struct {
-	ID                  string  `json:"id"`
-	Name                string  `json:"name"`
-	Time                string  `json:"time"`
-	Type                string  `json:"type"`                 // 菜系/类型
-	Rating              int     `json:"rating"`               // 星级 1-5
-	Comment             string  `json:"comment"`              // 评价/推荐菜
-	ReservationRequired bool    `json:"reservation_required"` // 需预约
-	ReservationInfo     string  `json:"reservation_info"`     // 预约信息
-	Lat                 float64 `json:"lat"`
-	Lng                 float64 `json:"lng"`
-	Website             string  `json:"website"` // 官网
+	ID                     string  `json:"id"`
+	Name                   string  `json:"name"`
+	Time                   string  `json:"time"`
+	Type                   string  `json:"type"`                    // 菜系/类型
+	Rating                 int     `json:"rating"`                  // 星级 1-5
+	Comment                string  `json:"comment"`                 // 评价/推荐菜
+	RecommendedRestaurants string  `json:"recommended_restaurants"` // 推荐餐厅
+	ReservationRequired    bool    `json:"reservation_required"`    // 需预约
+	ReservationInfo        string  `json:"reservation_info"`        // 预约信息
+	Lat                    float64 `json:"lat"`
+	Lng                    float64 `json:"lng"`
+	Website                string  `json:"website"` // 官网
 }
 
 type Route struct {
@@ -89,6 +91,11 @@ type GuideImage struct {
 	ID  string `json:"id"`
 	URL string `json:"url"`
 	// potentially caption, etc.
+}
+
+type Schedule struct {
+	ID      string `json:"id"`
+	Content string `json:"content"`
 }
 
 // GlobalStore manages plans
@@ -364,4 +371,17 @@ func (s *PlanStore) LoadGuideImages() ([]GuideImage, error) {
 
 func (s *PlanStore) SaveGuideImages(images []GuideImage) error {
 	return s.saveFile("guide_images.json", images)
+}
+
+func (s *PlanStore) LoadSchedules() ([]Schedule, error) {
+	var schedules []Schedule
+	err := s.loadFile("schedules.json", &schedules)
+	if schedules == nil {
+		schedules = []Schedule{}
+	}
+	return schedules, err
+}
+
+func (s *PlanStore) SaveSchedules(schedules []Schedule) error {
+	return s.saveFile("schedules.json", schedules)
 }

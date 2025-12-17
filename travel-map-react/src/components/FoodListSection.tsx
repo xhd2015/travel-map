@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Card, Table, Button, Form, Input, Popconfirm, Space, Select, Tag, Popover, Rate } from 'antd';
+import { useState } from 'react';
+import { Card, Table, Button, Form, Input, Popconfirm, Space, Rate } from 'antd';
 import { PlusOutlined, EditOutlined, SaveOutlined, CloseOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { Food } from '../api';
 
@@ -27,16 +27,9 @@ const EditableCell: React.FC<EditableCellProps> = ({
     ...restProps
 }) => {
     let inputNode = <Input />;
-    if (inputType === 'boolean') {
-        inputNode = (
-            <Select>
-                <Select.Option value={true}>是</Select.Option>
-                <Select.Option value={false}>否</Select.Option>
-            </Select>
-        );
-    } else if (inputType === 'rate') {
+    if (inputType === 'rate') {
         inputNode = <Rate />;
-    } else if (dataIndex === 'comment' || dataIndex === 'reservation_info') {
+    } else if (dataIndex === 'comment' || dataIndex === 'recommended_restaurants') {
         inputNode = <Input.TextArea autoSize />;
     }
 
@@ -58,68 +51,6 @@ const EditableCell: React.FC<EditableCellProps> = ({
     );
 };
 
-const ReservationDetails = ({ record, onSave }: { record: Food, onSave: (val: string) => void }) => {
-    const [visible, setVisible] = useState(false);
-    const [text, setText] = useState(record.reservation_info || '');
-    const [editing, setEditing] = useState(false);
-
-    useEffect(() => {
-        setText(record.reservation_info || '');
-    }, [record.reservation_info]);
-
-    const handleSave = () => {
-        onSave(text);
-        setEditing(false);
-    };
-
-    const handleCancel = () => {
-        setText(record.reservation_info || '');
-        setEditing(false);
-    };
-
-    return (
-        <Popover
-            content={
-                <div style={{ width: 300 }}>
-                    {editing ? (
-                        <>
-                            <Input.TextArea
-                                value={text}
-                                onChange={e => setText(e.target.value)}
-                                autoSize={{ minRows: 3, maxRows: 6 }}
-                            />
-                            <div style={{ marginTop: 8, textAlign: 'right' }}>
-                                <Space>
-                                    <Button size="small" onClick={handleCancel}>取消</Button>
-                                    <Button size="small" type="primary" onClick={handleSave}>保存</Button>
-                                </Space>
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <div style={{ marginBottom: 8, whiteSpace: 'pre-wrap', minHeight: '20px' }}>
-                                {text || <span style={{ color: '#ccc' }}>暂无预约信息</span>}
-                            </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <Button size="small" type="link" onClick={() => setEditing(true)}>编辑</Button>
-                            </div>
-                        </>
-                    )}
-                </div>
-            }
-            title="预约详情"
-            trigger="click"
-            open={visible}
-            onOpenChange={(v) => {
-                setVisible(v);
-                if (!v) setEditing(false);
-            }}
-        >
-            <Button size="small" type="link">详情</Button>
-        </Popover>
-    );
-};
-
 export const FoodListSection = ({ foods, onSave }: FoodListSectionProps) => {
     const [form] = Form.useForm();
     const [editingKey, setEditingKey] = useState('');
@@ -130,7 +61,6 @@ export const FoodListSection = ({ foods, onSave }: FoodListSectionProps) => {
     const edit = (record: Food) => {
         form.setFieldsValue({
             ...record,
-            reservation_required: record.reservation_required ?? false
         });
         setEditingKey(record.id);
         if (newRowId === record.id) {
@@ -174,15 +104,6 @@ export const FoodListSection = ({ foods, onSave }: FoodListSectionProps) => {
         }
     };
 
-    const handleUpdateReservationInfo = (id: string, info: string) => {
-        const newData = [...foods];
-        const index = newData.findIndex((item) => id === item.id);
-        if (index > -1) {
-            newData[index] = { ...newData[index], reservation_info: info };
-            onSave(newData);
-        }
-    };
-
     const handleAdd = () => {
         const newKey = Date.now().toString();
         const newFood: Food = {
@@ -192,9 +113,7 @@ export const FoodListSection = ({ foods, onSave }: FoodListSectionProps) => {
             type: '',
             rating: 0,
             comment: '',
-            reservation_required: false,
-            reservation_info: '',
-            website: '',
+            recommended_restaurants: '',
         };
         // Add to list immediately
         onSave([...foods, newFood]);
@@ -217,32 +136,7 @@ export const FoodListSection = ({ foods, onSave }: FoodListSectionProps) => {
         { title: '菜系/类型', dataIndex: 'type', key: 'type', width: '10%', editable: true },
         { title: '营业时间', dataIndex: 'time', key: 'time', width: '10%', editable: true },
         { title: '评价/推荐菜', dataIndex: 'comment', key: 'comment', width: '25%', editable: true },
-        {
-            title: '官网',
-            dataIndex: 'website',
-            key: 'website',
-            width: '10%',
-            editable: true,
-            render: (text: string) => text ? <a href={text} target="_blank" rel="noopener noreferrer">链接</a> : '-'
-        },
-        {
-            title: '需预约',
-            dataIndex: 'reservation_required',
-            key: 'reservation_required',
-            width: '10%',
-            editable: true,
-            render: (val: boolean, record: Food) => (
-                <Space>
-                    {val ? <Tag color="red">是</Tag> : <Tag color="green">否</Tag>}
-                    {val && (
-                        <ReservationDetails
-                            record={record}
-                            onSave={(info) => handleUpdateReservationInfo(record.id, info)}
-                        />
-                    )}
-                </Space>
-            )
-        },
+        { title: '推荐餐厅', dataIndex: 'recommended_restaurants', key: 'recommended_restaurants', width: '25%', editable: true },
         {
             title: '操作',
             dataIndex: 'operation',

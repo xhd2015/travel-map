@@ -11,6 +11,7 @@ export interface Spot {
     time: string;
     interior: string;
     story: string;
+    play_time?: string;
     reservation_required?: boolean;
     reservation_info?: string;
     lat?: number;
@@ -28,6 +29,7 @@ export interface Food {
     type: string;
     rating?: number;
     comment: string;
+    recommended_restaurants?: string;
     reservation_required?: boolean;
     reservation_info?: string;
     lat?: number;
@@ -78,6 +80,11 @@ export interface MapState {
 export interface GuideImage {
     id: string;
     url: string;
+}
+
+export interface Schedule {
+    id: string;
+    content: string;
 }
 
 const API_BASE = '/api';
@@ -207,5 +214,17 @@ export const api = {
         if (!res.ok) throw new Error('Failed to upload image');
         const data = await res.json();
         return data.url;
+    },
+    getSchedules: async (planId: string): Promise<Schedule[]> => {
+        const res = await fetch(`${API_BASE}/schedules?planId=${planId}`);
+        if (!res.ok) throw new Error('Failed to fetch schedules');
+        return res.json();
+    },
+    saveSchedules: async (planId: string, schedules: Schedule[]) => {
+        await fetch(`${API_BASE}/schedules?planId=${planId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(schedules),
+        });
     },
 };

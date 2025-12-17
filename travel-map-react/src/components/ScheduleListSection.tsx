@@ -1,23 +1,23 @@
 import { useState } from 'react';
 import { Card, Button, Form, Input, List, Space, Popconfirm } from 'antd';
-import { PlusOutlined, EditOutlined, SaveOutlined, CloseOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, SaveOutlined, CloseOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
-import type { Reference } from '../api';
+import type { Schedule } from '../api';
 
-interface ReferenceListSectionProps {
-    references: Reference[];
-    onSave: (r: Reference[]) => void;
+interface ScheduleListSectionProps {
+    schedules: Schedule[];
+    onSave: (s: Schedule[]) => void;
 }
 
-export const ReferenceListSection = ({ references, onSave }: ReferenceListSectionProps) => {
+export const ScheduleListSection = ({ schedules, onSave }: ScheduleListSectionProps) => {
     const [form] = Form.useForm();
     const [editingKey, setEditingKey] = useState('');
     const [newRowId, setNewRowId] = useState<string | null>(null);
 
     const isEditing = (id: string) => id === editingKey;
 
-    const edit = (record: Reference) => {
+    const edit = (record: Schedule) => {
         form.setFieldsValue({ ...record });
         setEditingKey(record.id);
         if (newRowId === record.id) {
@@ -28,7 +28,7 @@ export const ReferenceListSection = ({ references, onSave }: ReferenceListSectio
     };
 
     const handleDelete = (key: string) => {
-        const newData = references.filter((item) => item.id !== key);
+        const newData = schedules.filter((item) => item.id !== key);
         onSave(newData);
         if (key === newRowId) {
             setNewRowId(null);
@@ -45,8 +45,8 @@ export const ReferenceListSection = ({ references, onSave }: ReferenceListSectio
 
     const save = async (key: string) => {
         try {
-            const row = (await form.validateFields()) as Reference;
-            const newData = [...references];
+            const row = (await form.validateFields()) as Schedule;
+            const newData = [...schedules];
             const index = newData.findIndex((item) => key === item.id);
 
             if (index > -1) {
@@ -63,24 +63,41 @@ export const ReferenceListSection = ({ references, onSave }: ReferenceListSectio
 
     const handleAdd = () => {
         const newKey = Date.now().toString();
-        const newReference: Reference = {
+        const newSchedule: Schedule = {
             id: newKey,
-            description: '',
-            link: '',
+            content: '',
         };
-        onSave([...references, newReference]);
+        onSave([...schedules, newSchedule]);
         setEditingKey(newKey);
         setNewRowId(newKey);
-        form.setFieldsValue(newReference);
+        form.setFieldsValue(newSchedule);
+    };
+
+    const moveUp = (index: number) => {
+        if (index === 0) return;
+        const newData = [...schedules];
+        const temp = newData[index];
+        newData[index] = newData[index - 1];
+        newData[index - 1] = temp;
+        onSave(newData);
+    };
+
+    const moveDown = (index: number) => {
+        if (index === schedules.length - 1) return;
+        const newData = [...schedules];
+        const temp = newData[index];
+        newData[index] = newData[index + 1];
+        newData[index + 1] = temp;
+        onSave(newData);
     };
 
     return (
-        <Card title="参考资料" bordered={false}>
+        <Card title="计划" bordered={false}>
             <Form form={form} component={false}>
                 <List
                     itemLayout="vertical"
-                    dataSource={references}
-                    renderItem={(item) => {
+                    dataSource={schedules}
+                    renderItem={(item, index) => {
                         const editable = isEditing(item.id);
                         return (
                             <List.Item
@@ -94,6 +111,8 @@ export const ReferenceListSection = ({ references, onSave }: ReferenceListSectio
                                     ) : (
                                         <Space key="edit-delete">
                                             <a onClick={() => edit(item)}><EditOutlined /> 编辑</a>
+                                            <a onClick={() => moveUp(index)} style={{ color: index === 0 ? 'lightgray' : undefined, cursor: index === 0 ? 'default' : 'pointer' }}><ArrowUpOutlined /> 上移</a>
+                                            <a onClick={() => moveDown(index)} style={{ color: index === schedules.length - 1 ? 'lightgray' : undefined, cursor: index === schedules.length - 1 ? 'default' : 'pointer' }}><ArrowDownOutlined /> 下移</a>
                                             <Popconfirm title="确定删除吗?" onConfirm={() => handleDelete(item.id)}>
                                                 <a style={{ color: 'red' }}><DeleteOutlined /> 删除</a>
                                             </Popconfirm>
@@ -102,34 +121,22 @@ export const ReferenceListSection = ({ references, onSave }: ReferenceListSectio
                                 ]}
                             >
                                 {editable ? (
-                                    <>
-                                        <Form.Item name="description" label="描述信息" rules={[{ required: true, message: '请输入描述信息' }]}>
-                                            <Input.TextArea autoSize={{ minRows: 2, maxRows: 10 }} />
-                                        </Form.Item>
-                                        <Form.Item name="link" label="相关链接">
-                                            <Input />
-                                        </Form.Item>
-                                    </>
+                                    <Form.Item name="content" rules={[{ required: true, message: '请输入内容' }]}>
+                                        <Input.TextArea autoSize={{ minRows: 2, maxRows: 10 }} />
+                                    </Form.Item>
                                 ) : (
-                                    <List.Item.Meta
-                                        title={<ReactMarkdown remarkPlugins={[remarkBreaks]}>{item.description}</ReactMarkdown>}
-                                        description={
-                                            item.link ? (
-                                                <a href={item.link} target="_blank" rel="noopener noreferrer">
-                                                    {item.link}
-                                                </a>
-                                            ) : (
-                                                '无链接'
-                                            )
-                                        }
-                                    />
+                                    <div style={{ color: 'rgba(0, 0, 0, 0.88)' }}>
+                                        <ReactMarkdown remarkPlugins={[remarkBreaks]}>
+                                            {item.content}
+                                        </ReactMarkdown>
+                                    </div>
                                 )}
                             </List.Item>
                         );
                     }}
                     footer={
                         <Button type="dashed" onClick={handleAdd} block icon={<PlusOutlined />}>
-                            添加参考资料
+                            添加计划
                         </Button>
                     }
                 />

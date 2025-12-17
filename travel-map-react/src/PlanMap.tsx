@@ -244,7 +244,6 @@ export default function PlanMap() {
     return (
         <Layout style={{ height: '100vh' }}>
             <PlanMapSidebar
-                planId={planId}
                 onBack={() => navigate(`/plan/${planId}`)}
                 searchText={searchText}
                 onSearch={handleSearch}

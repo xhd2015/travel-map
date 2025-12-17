@@ -245,6 +245,7 @@ func RegisterAPI(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/references", handleReferences)
 	mux.HandleFunc("/api/config", handleConfig)
 	mux.HandleFunc("/api/guide-images", handleGuideImages)
+	mux.HandleFunc("/api/schedules", handleSchedules)
 	mux.HandleFunc("/api/upload-guide-image", handleUploadGuideImage)
 	mux.HandleFunc("/ping", handlePing)
 
@@ -531,6 +532,37 @@ func handleGuideImages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.SaveGuideImages(images); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func handleSchedules(w http.ResponseWriter, r *http.Request) {
+	s, err := getPlanStore(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if r.Method == http.MethodGet {
+		schedules, err := s.LoadSchedules()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(schedules)
+		return
+	}
+	if r.Method == http.MethodPost {
+		var schedules []store.Schedule
+		if err := json.NewDecoder(r.Body).Decode(&schedules); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := s.SaveSchedules(schedules); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

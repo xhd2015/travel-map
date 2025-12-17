@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { Layout, Typography, Spin, Space, Button } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { api } from './api';
-import type { Spot, Route as RouteType, Question, Reference, Food, Config, GuideImage } from './api';
+import type { Spot, Route as RouteType, Question, Reference, Food, Config, GuideImage, Schedule } from './api';
 import './App.css';
 import { useParams, useNavigate } from 'react-router-dom';
 
 import { MapSection } from './components/MapSection';
 import { GuideMapSection } from './components/GuideMapSection';
+import { ScheduleListSection } from './components/ScheduleListSection';
 import { SpotListSection } from './components/SpotListSection';
 import { FoodListSection } from './components/FoodListSection';
 import { RouteListSection } from './components/RouteListSection';
@@ -28,6 +29,7 @@ function PlanDetail() {
   const [references, setReferences] = useState<Reference[]>([]);
   const [config, setConfig] = useState<Config>({ map_image: '' });
   const [guideImages, setGuideImages] = useState<GuideImage[]>([]);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,7 +40,7 @@ function PlanDetail() {
 
   const loadData = async (id: string) => {
     try {
-      const [s, f, r, q, ref, c, g] = await Promise.all([
+      const [s, f, r, q, ref, c, g, sch] = await Promise.all([
         api.getSpots(id),
         api.getFoods(id),
         api.getRoutes(id),
@@ -46,6 +48,7 @@ function PlanDetail() {
         api.getReferences(id),
         api.getConfig(id),
         api.getGuideImages(id),
+        api.getSchedules(id),
       ]);
       setSpots(s || []);
       setFoods(f || []);
@@ -54,6 +57,7 @@ function PlanDetail() {
       setReferences(ref || []);
       setConfig(c || { map_image: '' });
       setGuideImages(g || []);
+      setSchedules(sch || []);
     } catch (e) {
       console.error("Failed to load data", e);
     } finally {
@@ -91,10 +95,19 @@ function PlanDetail() {
             api.saveGuideImages(planId, g);
           }} />
 
-          <SpotListSection spots={spots} onSave={(s) => {
-            setSpots(s);
-            api.saveSpots(planId, s);
+          <ScheduleListSection schedules={schedules} onSave={(s) => {
+            setSchedules(s);
+            api.saveSchedules(planId, s);
           }} />
+
+          <SpotListSection
+            spots={spots}
+            destinationName={config.destination?.name}
+            onSave={(s) => {
+              setSpots(s);
+              api.saveSpots(planId, s);
+            }}
+          />
 
           <FoodListSection foods={foods} onSave={(f) => {
             setFoods(f);

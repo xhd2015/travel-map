@@ -6,6 +6,7 @@ import type { Spot } from '../api';
 interface SpotListSectionProps {
     spots: Spot[];
     onSave: (s: Spot[]) => void;
+    destinationName?: string;
 }
 
 interface EditableCellProps extends React.HTMLAttributes<HTMLElement> {
@@ -120,7 +121,7 @@ const ReservationDetails = ({ record, onSave }: { record: Spot, onSave: (val: st
     );
 };
 
-export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
+export const SpotListSection = ({ spots, onSave, destinationName }: SpotListSectionProps) => {
     const [form] = Form.useForm();
     const [editingKey, setEditingKey] = useState('');
     const [newRowId, setNewRowId] = useState<string | null>(null);
@@ -192,6 +193,7 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
             website: '',
             interior: '',
             story: '',
+            play_time: '',
             reservation_required: false,
             reservation_info: '',
         };
@@ -214,8 +216,8 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
             render: (rating: number) => <Rate disabled defaultValue={rating} style={{ minWidth: 150 }} />
         },
         { title: '开放时间', dataIndex: 'time', key: 'time', width: '10%', editable: true },
-        { title: '介绍', dataIndex: 'interior', key: 'interior', width: '15%', editable: true },
-        { title: '典故', dataIndex: 'story', key: 'story', width: '30%', editable: true },
+        { title: '介绍', dataIndex: 'interior', key: 'interior', width: '25%', editable: true },
+        { title: '游玩时长', dataIndex: 'play_time', key: 'play_time', width: '10%', editable: true },
         {
             title: '官网',
             dataIndex: 'website',
@@ -293,7 +295,8 @@ export const SpotListSection = ({ spots, onSave }: SpotListSectionProps) => {
     const mm = tomorrow.getMonth() + 1;
     const dd = tomorrow.getDate();
     const dateStr = `${yyyy}年${mm}月${dd}日`;
-    const tooltipText = `使用Deepseek，提示词: 我将于${dateStr}，从九江自驾到景德镇，请列出景德镇的“此生必去”景点，按重要性排序，给出一个表格，包含：景点名，开放时间范围，是否需要预约，预约方式，游玩方式（步行，观光车，缆车），游玩花费时间`;
+    const dest = destinationName || '目的地';
+    const tooltipText = `使用Deepseek，提示词: 我将于${dateStr}，在${dest}旅游，请列出${dest}的“此生必去”景点，按重要性排序，给出一个表格，包含：景点名，开放时间范围，是否需要预约，预约方式，游玩方式（步行，观光车，缆车），游玩花费时间`;
 
     const title = (
         <div style={{ display: 'flex', alignItems: 'center' }}>

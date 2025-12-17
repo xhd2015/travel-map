@@ -7,7 +7,6 @@ const { Sider } = Layout;
 const { Title } = Typography;
 
 interface PlanMapSidebarProps {
-    planId: string;
     onBack: () => void;
     searchText: string;
     onSearch: (value: string) => void;
@@ -19,7 +18,6 @@ interface PlanMapSidebarProps {
 }
 
 export const PlanMapSidebar: React.FC<PlanMapSidebarProps> = ({
-    planId,
     onBack,
     searchText,
     onSearch,
