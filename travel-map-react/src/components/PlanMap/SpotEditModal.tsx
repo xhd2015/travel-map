@@ -49,7 +49,7 @@ export const SpotEditModal: React.FC<SpotEditModalProps> = ({ open, spot, onOk, 
             open={open}
             onOk={handleOk}
             onCancel={onCancel}
-            destroyOnClose
+            destroyOnHidden
             footer={[
                 onDelete && spot && (
                     <Popconfirm

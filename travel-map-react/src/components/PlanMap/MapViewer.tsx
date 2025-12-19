@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Button, Popconfirm, Select } from 'antd';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
@@ -47,9 +47,46 @@ for (let i = 1; i <= 50; i++) {
     NumberedIcons[i] = createNumberedIcon(i);
 }
 
-// Map Updater Helper
+// Tile Providers
+const TileProviders: Record<string, { name: string, url: string, attribution: string }> = {
+    'osm': {
+        name: 'OpenStreetMap',
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    },
+    'carto_light': {
+        name: 'CartoDB Light',
+        url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    },
+    'carto_dark': {
+        name: 'CartoDB Dark',
+        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    },
+    'esri_satellite': {
+        name: 'Esri Satellite',
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+    },
+    'gaode': {
+        name: '高德地图 (偏移)',
+        url: 'https://webrd02.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}',
+        attribution: '&copy; 高德地图'
+    }
+};
+
 const MapUpdater = ({ center, zoom }: { center: [number, number], zoom?: number }) => {
     const map = useMap();
+
+    // Invalidate size once on mount to handle initial layout settlement
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            map.invalidateSize();
+        }, 100);
+        return () => clearTimeout(timer);
+    }, [map]);
+
     useEffect(() => {
         if (zoom) {
             map.flyTo(center, zoom);
@@ -65,18 +102,27 @@ const InteractionBridge = ({
     onAddSpot,
     onMarkLocation,
     onSetDestination,
-    hasDestination
+    hasDestination,
+    isPickingLocation,
+    onMapClick
 }: {
     onAddSpot: (lat: number, lng: number) => void,
     onMarkLocation: (lat: number, lng: number) => void,
     onSetDestination: (center: L.LatLng, zoom: number, destLat: number, destLng: number) => void,
-    hasDestination: boolean
+    hasDestination: boolean,
+    isPickingLocation?: boolean,
+    onMapClick?: (lat: number, lng: number) => void
 }) => {
     const map = useMap();
     const [menu, setMenu] = useState<{ x: number, y: number, lat: number, lng: number } | null>(null);
 
     useMapEvents({
         click: (e) => {
+            if (isPickingLocation && onMapClick) {
+                onMapClick(e.latlng.lat, e.latlng.lng);
+                return;
+            }
+
             if (menu) {
                 setMenu(null);
             } else {
@@ -91,6 +137,8 @@ const InteractionBridge = ({
         dragstart: () => setMenu(null),
         zoomstart: () => setMenu(null),
     });
+
+    if (isPickingLocation) return null;
 
     return (
         <MapContextMenu
@@ -316,6 +364,8 @@ interface MapViewerProps {
     onLocateDestination?: () => void;
     showDestinationOverlay?: boolean;
     style?: React.CSSProperties;
+    isPickingLocation?: boolean;
+    onMapClick?: (lat: number, lng: number) => void;
 }
 
 export const MapViewer: React.FC<MapViewerProps> = ({
@@ -331,11 +381,14 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     onSetDestination,
     onLocateDestination,
     showDestinationOverlay = true,
-    style
+    style,
+    isPickingLocation,
+    onMapClick
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
     const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
+    const [currentProvider, setCurrentProvider] = useState('gaode');
 
     const handleSelectResult = (result: SearchResult) => {
         setSelectedResult(result);
@@ -343,6 +396,28 @@ export const MapViewer: React.FC<MapViewerProps> = ({
 
     return (
         <div style={{ position: 'relative', ...style }}>
+            <div style={{
+                position: 'absolute',
+                bottom: 24,
+                left: 24,
+                zIndex: 1000,
+                backgroundColor: 'white',
+                padding: 4,
+                borderRadius: 4,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+            }}>
+                <Select
+                    value={currentProvider}
+                    onChange={setCurrentProvider}
+                    size="small"
+                    style={{ width: 140 }}
+                    getPopupContainer={(trigger) => trigger.parentElement || document.body}
+                >
+                    {Object.entries(TileProviders).map(([key, provider]) => (
+                        <Select.Option key={key} value={key}>{provider.name}</Select.Option>
+                    ))}
+                </Select>
+            </div>
             {showDestinationOverlay && onLocateDestination && (
                 <DestinationOverlay
                     config={config}
@@ -353,8 +428,13 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             <SearchResultsList results={searchResults} onSelect={handleSelectResult} />
             <MapContainer center={mapCenter} zoom={mapZoom} style={{ height: '100%', width: '100%' }}>
                 <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution={TileProviders[currentProvider].attribution}
+                    url={TileProviders[currentProvider].url}
+                    eventHandlers={{
+                        tileloadstart: (e: any) => console.log('DEBUG tile load start', e.coords),
+                        tileload: (e: any) => console.log('DEBUG tile load success', e.coords),
+                        tileerror: (e: any) => console.error('DEBUG tile load error', e.coords, e.error)
+                    }}
                 />
                 <MapUpdater center={mapCenter} zoom={mapZoom} />
                 <MapResultFlier target={selectedResult} />
@@ -363,6 +443,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                     onMarkLocation={onMarkLocation}
                     onSetDestination={onSetDestination}
                     hasDestination={!!config.destination}
+                    isPickingLocation={isPickingLocation}
+                    onMapClick={onMapClick}
                 />
                 <MapSearchHandler query={searchQuery} onResults={setSearchResults} />
                 {spots.map((spot) => (

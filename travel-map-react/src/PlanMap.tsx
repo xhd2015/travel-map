@@ -43,6 +43,9 @@ export default function PlanMap() {
     const [isAddingSpot, setIsAddingSpot] = useState(false);
     const [tempLatLng, setTempLatLng] = useState<{ lat: number; lng: number } | null>(null);
 
+    // Picking location state
+    const [pickingLocationSpot, setPickingLocationSpot] = useState<Spot | null>(null);
+
     // Destination editing state
     const [isDestinationModalOpen, setIsDestinationModalOpen] = useState(false);
     const [pendingDestination, setPendingDestination] = useState<{ lat: number, lng: number, zoom: number, center: { lat: number, lng: number } } | null>(null);
@@ -125,6 +128,20 @@ export default function PlanMap() {
         if (spot.lat && spot.lng) {
             setMapCenter([spot.lat, spot.lng]);
             setMapZoom(15);
+        }
+    };
+
+    const handlePickLocation = (spot: Spot) => {
+        setPickingLocationSpot(spot);
+        message.info(`请在地图上点击为"${spot.name}"选择位置`);
+    };
+
+    const handleMapClick = (lat: number, lng: number) => {
+        if (pickingLocationSpot) {
+            const updatedSpot = { ...pickingLocationSpot, lat, lng };
+            handleSaveSpot(updatedSpot);
+            setPickingLocationSpot(null);
+            message.success(`已更新"${updatedSpot.name}"的位置`);
         }
     };
 
@@ -262,7 +279,7 @@ export default function PlanMap() {
     if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><Spin size="large" /></div>;
 
     return (
-        <Layout style={{ height: '100vh' }}>
+        <Layout style={{ height: '100vh' }} hasSider>
             <PlanMapSidebar
                 onBack={() => navigate(`/plan/${planId}`)}
                 searchText={searchText}
@@ -272,6 +289,7 @@ export default function PlanMap() {
                 onSelectResult={handleSelectResult}
                 spots={spots}
                 onSelectSpot={handleSelectSpot}
+                onPickLocation={handlePickLocation}
             />
             <Content style={{ position: 'relative' }}>
                 <MapViewer
@@ -288,6 +306,8 @@ export default function PlanMap() {
                     onLocateDestination={handleLocateDestination}
                     showDestinationOverlay={true}
                     style={{ height: '100%', width: '100%' }}
+                    isPickingLocation={!!pickingLocationSpot}
+                    onMapClick={handleMapClick}
                 />
             </Content>
 

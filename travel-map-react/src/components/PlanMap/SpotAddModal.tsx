@@ -30,7 +30,7 @@ export const SpotAddModal: React.FC<SpotAddModalProps> = ({ open, onOk, onCancel
             onCancel={onCancel}
             okText="添加"
             cancelText="取消"
-            destroyOnClose
+            destroyOnHidden
         >
             <Input
                 placeholder="景点名称"

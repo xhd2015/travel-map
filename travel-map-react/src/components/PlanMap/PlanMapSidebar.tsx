@@ -15,6 +15,7 @@ interface PlanMapSidebarProps {
     onSelectResult: (item: any) => void;
     spots: Spot[];
     onSelectSpot: (spot: Spot) => void;
+    onPickLocation: (spot: Spot) => void;
 }
 
 export const PlanMapSidebar: React.FC<PlanMapSidebarProps> = ({
@@ -25,7 +26,8 @@ export const PlanMapSidebar: React.FC<PlanMapSidebarProps> = ({
     searchResults,
     onSelectResult,
     spots,
-    onSelectSpot
+    onSelectSpot,
+    onPickLocation
 }) => {
     return (
         <Sider width={400} theme="light" style={{ borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column' }}>
@@ -73,8 +75,56 @@ export const PlanMapSidebar: React.FC<PlanMapSidebarProps> = ({
                                     onClick={() => onSelectSpot(spot)}
                                 >
                                     <List.Item.Meta
+                                        avatar={(
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32 }}>
+                                                {(() => {
+                                                    if (spot.icon === 'flag') {
+                                                        return <div style={{ fontSize: '24px', lineHeight: 1 }}>🚩</div>;
+                                                    }
+                                                    if (spot.icon && spot.icon.startsWith('number-')) {
+                                                        const num = parseInt(spot.icon.split('-')[1], 10);
+                                                        if (!isNaN(num)) {
+                                                            return (
+                                                                <div style={{
+                                                                    backgroundColor: '#1890ff',
+                                                                    width: '24px',
+                                                                    height: '24px',
+                                                                    borderRadius: '50%',
+                                                                    color: 'white',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    fontSize: '12px',
+                                                                    border: '2px solid white',
+                                                                    boxShadow: '0 0 4px rgba(0,0,0,0.5)'
+                                                                }}>
+                                                                    {num}
+                                                                </div>
+                                                            );
+                                                        }
+                                                    }
+                                                    return <EnvironmentOutlined style={{ fontSize: '20px', color: '#1890ff' }} />;
+                                                })()}
+                                            </div>
+                                        )}
                                         title={spot.name}
-                                        description={spot.lat && spot.lng ? '已定位' : '无坐标'}
+                                        description={
+                                            <div>
+                                                {spot.lat && spot.lng ? '已定位' : (
+                                                    <Button
+                                                        size="small"
+                                                        type="link"
+                                                        style={{ padding: 0, height: 'auto' }}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onPickLocation(spot);
+                                                        }}
+                                                    >
+                                                        选择位置
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        }
                                     />
                                 </List.Item>
                             )}
