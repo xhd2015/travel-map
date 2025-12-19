@@ -247,6 +247,7 @@ func RegisterAPI(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/guide-images", handleGuideImages)
 	mux.HandleFunc("/api/schedules", handleSchedules)
 	mux.HandleFunc("/api/upload-guide-image", handleUploadGuideImage)
+	mux.HandleFunc("/api/proxy/search", handleProxySearch)
 	mux.HandleFunc("/ping", handlePing)
 
 	return nil
@@ -632,6 +633,42 @@ func handleUploadGuideImage(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"url": url,
 	})
+}
+
+func handleProxySearch(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	keywords := query.Get("keywords")
+	if keywords == "" {
+		http.Error(w, "Missing keywords", http.StatusBadRequest)
+		return
+	}
+
+	// Check for AMAP_KEY env var
+	key := os.Getenv("AMAP_KEY")
+	if key == "" {
+		// Try to look for a key file? No, just use env.
+		// If no key, maybe return a helpful error so frontend can show it.
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "AMAP_KEY not configured in backend",
+		})
+		return
+	}
+
+	// Call Gaode API
+	// https://restapi.amap.com/v3/place/text?keywords=...&key=...&offset=20&page=1&extensions=all
+	apiURL := fmt.Sprintf("https://restapi.amap.com/v3/place/text?keywords=%s&key=%s&offset=20&page=1&extensions=all", url.QueryEscape(keywords), key)
+
+	resp, err := http.Get(apiURL)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to call Gaode API: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Forward response
+	w.Header().Set("Content-Type", "application/json")
+	io.Copy(w, resp.Body)
 }
 
 // mimeTypeHandler wraps an http.Handler and sets proper MIME types

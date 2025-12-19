@@ -1,9 +1,11 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { Button, Popconfirm, Select } from 'antd';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Button, Popconfirm, Select, message } from 'antd';
 import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import type { Spot, Config } from '../../api';
+import { api } from '../../api';
+import type { SearchResult } from '../../api';
 import { MapContextMenu } from './MapContextMenu';
 import { DestinationOverlay } from './DestinationOverlay';
 
@@ -36,9 +38,9 @@ const DestinationIcon = L.divIcon({
 
 const createNumberedIcon = (num: number) => L.divIcon({
     className: 'custom-number-icon',
-    html: `<div style="background-color: #1890ff; width: 20px; height: 20px; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-size: 12px; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.5);">${num}</div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10]
+    html: `<div style="background-color: #1890ff; width: 32px; height: 32px; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.5); font-weight: bold;">${num}</div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16]
 });
 
 // Pre-generate numbered icons for stability
@@ -46,6 +48,8 @@ const NumberedIcons: Record<number, L.DivIcon> = {};
 for (let i = 1; i <= 50; i++) {
     NumberedIcons[i] = createNumberedIcon(i);
 }
+
+const LOCATION_CURSOR = `url('data:image/svg+xml;utf8,<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><path d="M16 0C9.373 0 4 5.373 4 12c0 9 12 20 12 20s12-11 12-20c0-6.627-5.373-12-12-12z" fill="%231890ff" stroke="white" stroke-width="2"/><circle cx="16" cy="12" r="4" fill="white"/></svg>') 16 32, crosshair`;
 
 // Tile Providers
 const TileProviders: Record<string, { name: string, url: string, attribution: string }> = {
@@ -116,6 +120,17 @@ const InteractionBridge = ({
     const map = useMap();
     const [menu, setMenu] = useState<{ x: number, y: number, lat: number, lng: number } | null>(null);
 
+    useEffect(() => {
+        if (isPickingLocation) {
+            map.getContainer().style.cursor = LOCATION_CURSOR;
+        } else {
+            map.getContainer().style.cursor = '';
+        }
+        return () => {
+            map.getContainer().style.cursor = '';
+        };
+    }, [isPickingLocation, map]);
+
     useMapEvents({
         click: (e) => {
             if (isPickingLocation && onMapClick) {
@@ -159,14 +174,9 @@ const InteractionBridge = ({
     );
 };
 
-interface SearchResult {
-    place_id: string;
-    lat: string;
-    lon: string;
-    display_name: string;
-}
+// SearchResult interface imported from api
 
-const MapSearchHandler = ({ query, onResults }: { query: string, onResults: (results: SearchResult[]) => void }) => {
+const MapSearchHandler = ({ query, onResults, provider }: { query: string, onResults: (results: SearchResult[]) => void, provider: string }) => {
     const map = useMap();
     useEffect(() => {
         if (!query) {
@@ -174,18 +184,30 @@ const MapSearchHandler = ({ query, onResults }: { query: string, onResults: (res
             return;
         }
 
-        const bounds = map.getBounds();
-        const viewbox = `${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()},${bounds.getSouth()}`;
-
-        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&viewbox=${viewbox}&bounded=1&limit=10`)
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) {
-                    onResults(data);
-                }
-            })
-            .catch(err => console.error("Search failed", err));
-    }, [query, map, onResults]);
+        if (provider === 'gaode') {
+            api.searchGaode(query)
+                .then(onResults)
+                .catch(err => {
+                    if (err.message === 'AMAP_KEY_MISSING') {
+                        message.error('未配置高德API Key');
+                        onResults([]);
+                        return;
+                    }
+                    console.error("Search failed", err);
+                });
+        } else {
+            const bounds = map.getBounds();
+            const boundParams = {
+                west: bounds.getWest(),
+                north: bounds.getNorth(),
+                east: bounds.getEast(),
+                south: bounds.getSouth()
+            };
+            api.searchNominatim(query, boundParams)
+                .then(onResults)
+                .catch(err => console.error("Search failed", err));
+        }
+    }, [query, map, onResults, provider]);
 
     return null;
 };
@@ -194,7 +216,7 @@ const MapResultFlier = ({ target }: { target: SearchResult | null }) => {
     const map = useMap();
     useEffect(() => {
         if (target) {
-            map.flyTo([parseFloat(target.lat), parseFloat(target.lon)], 16);
+            map.flyTo([parseFloat(String(target.lat)), parseFloat(String(target.lon))], 16);
         }
     }, [target, map]);
     return null;
@@ -342,7 +364,7 @@ const SearchResultMarker = ({ result, index }: { result: SearchResult, index: nu
 
     return (
         <Marker
-            position={[parseFloat(result.lat), parseFloat(result.lon)]}
+            position={[parseFloat(String(result.lat)), parseFloat(String(result.lon))]}
             icon={icon}
         >
             <Popup>{result.display_name}</Popup>
@@ -366,6 +388,8 @@ interface MapViewerProps {
     style?: React.CSSProperties;
     isPickingLocation?: boolean;
     onMapClick?: (lat: number, lng: number) => void;
+    provider?: string;
+    onProviderChange?: (provider: string) => void;
 }
 
 export const MapViewer: React.FC<MapViewerProps> = ({
@@ -383,12 +407,17 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     showDestinationOverlay = true,
     style,
     isPickingLocation,
-    onMapClick
+    onMapClick,
+    provider,
+    onProviderChange
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
     const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
-    const [currentProvider, setCurrentProvider] = useState('gaode');
+    const [localProvider, setLocalProvider] = useState('gaode');
+
+    const currentProvider = provider || localProvider;
+    const handleProviderChange = onProviderChange || setLocalProvider;
 
     const handleSelectResult = (result: SearchResult) => {
         setSelectedResult(result);
@@ -408,7 +437,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
             }}>
                 <Select
                     value={currentProvider}
-                    onChange={setCurrentProvider}
+                    onChange={handleProviderChange}
                     size="small"
                     style={{ width: 140 }}
                     getPopupContainer={(trigger) => trigger.parentElement || document.body}
@@ -430,11 +459,6 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                 <TileLayer
                     attribution={TileProviders[currentProvider].attribution}
                     url={TileProviders[currentProvider].url}
-                    eventHandlers={{
-                        tileloadstart: (e: any) => console.log('DEBUG tile load start', e.coords),
-                        tileload: (e: any) => console.log('DEBUG tile load success', e.coords),
-                        tileerror: (e: any) => console.error('DEBUG tile load error', e.coords, e.error)
-                    }}
                 />
                 <MapUpdater center={mapCenter} zoom={mapZoom} />
                 <MapResultFlier target={selectedResult} />
@@ -446,7 +470,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                     isPickingLocation={isPickingLocation}
                     onMapClick={onMapClick}
                 />
-                <MapSearchHandler query={searchQuery} onResults={setSearchResults} />
+                <MapSearchHandler query={searchQuery} onResults={setSearchResults} provider={currentProvider} />
                 {spots.map((spot) => (
                     <SpotMarker
                         key={spot.id}

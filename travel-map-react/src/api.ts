@@ -63,6 +63,7 @@ export interface Config {
     map_image: string;
     destination?: Destination;
     map_state?: MapState;
+    map_provider?: string;
 }
 
 export interface Destination {
@@ -89,7 +90,62 @@ export interface Schedule {
 
 const API_BASE = '/api';
 
+export interface SearchResult {
+    place_id?: string;
+    display_name: string;
+    lat: string | number;
+    lon: string | number;
+    [key: string]: any;
+}
+
 export const api = {
+    // ...
+    // Search APIs
+    searchGaode: async (query: string, signal?: AbortSignal): Promise<SearchResult[]> => {
+        const response = await fetch(`${API_BASE}/proxy/search?keywords=${encodeURIComponent(query)}`, {
+            signal
+        });
+
+        if (response.status === 401) {
+            throw new Error('AMAP_KEY_MISSING');
+        }
+
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+
+        const json = await response.json();
+
+        if (json.pois && Array.isArray(json.pois)) {
+            return json.pois.map((poi: any) => {
+                const [lng, lat] = (poi.location || "0,0").split(',');
+                return {
+                    place_id: poi.id,
+                    display_name: `${poi.name} - ${poi.address || ''}`,
+                    lat: parseFloat(lat),
+                    lon: parseFloat(lng),
+                    ...poi
+                };
+            });
+        }
+        return [];
+    },
+
+    searchNominatim: async (query: string, bounds?: { west: number, north: number, east: number, south: number }, signal?: AbortSignal): Promise<SearchResult[]> => {
+        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
+        if (bounds) {
+            const viewbox = `${bounds.west},${bounds.north},${bounds.east},${bounds.south}`;
+            url += `&viewbox=${viewbox}&bounded=1&limit=10`;
+        }
+
+        const response = await fetch(url, { signal });
+        const data = await response.json();
+        if (Array.isArray(data)) {
+            return data; // Nominatim returns array of objects that mostly match SearchResult
+        }
+        return [];
+    },
+
     getPlans: async (): Promise<Plan[]> => {
         const res = await fetch(`${API_BASE}/plans`);
         if (!res.ok) throw new Error('Failed to fetch plans');

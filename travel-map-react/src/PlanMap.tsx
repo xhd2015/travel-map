@@ -1,15 +1,17 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Layout, message, Spin } from 'antd';
 import { useParams, useNavigate } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { api } from './api';
-import type { Spot, Config, Destination, MapState } from './api';
+import type { Spot, Config } from './api';
 import { PlanMapSidebar } from './components/PlanMap/PlanMapSidebar';
 import { MapViewer } from './components/PlanMap/MapViewer';
 import { SpotEditModal } from './components/PlanMap/SpotEditModal';
 import { DestinationEditModal } from './components/PlanMap/DestinationEditModal';
 import { SpotAddModal } from './components/PlanMap/SpotAddModal';
+import { useMapSearch } from './hooks/useMapSearch';
+import { useMapInteractions } from './hooks/useMapInteractions';
 
 // Fix leaflet marker icons
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -34,27 +36,66 @@ export default function PlanMap() {
     const [loading, setLoading] = useState(true);
     const [mapCenter, setMapCenter] = useState<[number, number]>([39.9042, 116.4074]);
     const [mapZoom, setMapZoom] = useState<number>(13);
-
-    // Editing state
-    const [editingSpot, setEditingSpot] = useState<Spot | null>(null);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
-    // Adding spot state
-    const [isAddingSpot, setIsAddingSpot] = useState(false);
-    const [tempLatLng, setTempLatLng] = useState<{ lat: number; lng: number } | null>(null);
-
-    // Picking location state
-    const [pickingLocationSpot, setPickingLocationSpot] = useState<Spot | null>(null);
-
-    // Destination editing state
-    const [isDestinationModalOpen, setIsDestinationModalOpen] = useState(false);
-    const [pendingDestination, setPendingDestination] = useState<{ lat: number, lng: number, zoom: number, center: { lat: number, lng: number } } | null>(null);
-
-    // Search state
     const [searchText, setSearchText] = useState('');
-    const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [searchLoading, setSearchLoading] = useState(false);
-    const searchTimeoutRef = useRef<number | null>(null);
+
+    // Map Interactions Hook
+    const {
+        isAddingSpot, setIsAddingSpot,
+        // tempLatLng, setTempLatLng, // internal to hook, not needed here unless exposed
+        editingSpot, // setEditingSpot,
+        isEditModalOpen, setIsEditModalOpen,
+        pickingLocationSpot, // setPickingLocationSpot,
+        isDestinationModalOpen,
+        mapProvider, setMapProvider,
+
+        handleAddSpotRequest,
+        handleAddSpotConfirm,
+        handleMarkLocation,
+        handleEditSpot,
+        handleSaveSpot,
+        handleDeleteSpot,
+        handleReorderSpots,
+        handlePickLocation,
+        handleCancelPickLocation,
+        handleMapClick,
+        handleSetDestination,
+        handleSaveDestination,
+        closeDestinationModal
+    } = useMapInteractions({
+        planId: planId || '',
+        config,
+        spots,
+        onSaveConfig: async (newConfig) => {
+            setConfig(newConfig);
+            try {
+                await api.saveConfig(planId!, newConfig);
+            } catch (e) {
+                console.error(e);
+                message.error("保存配置失败");
+            }
+        },
+        onSaveSpots: async (newSpots) => {
+            setSpots(newSpots);
+            try {
+                await api.saveSpots(planId!, newSpots);
+            } catch (e) {
+                console.error(e);
+                message.error("保存地点失败");
+            }
+        }
+    });
+
+    // Map Search Hook
+    const {
+        searchResults,
+        searchLoading,
+        handleSearch: hookHandleSearch
+    } = useMapSearch(mapProvider);
+
+    const handleSearch = (value: string, immediate?: boolean) => {
+        setSearchText(value);
+        hookHandleSearch(value, immediate);
+    };
 
     useEffect(() => {
         if (planId) {
@@ -89,34 +130,6 @@ export default function PlanMap() {
         }
     };
 
-    const handleSearch = (value: string) => {
-        setSearchText(value);
-        if (searchTimeoutRef.current) {
-            window.clearTimeout(searchTimeoutRef.current);
-        }
-        if (!value) {
-            setSearchResults([]);
-            return;
-        }
-        searchTimeoutRef.current = window.setTimeout(() => {
-            fetchSearchResults(value);
-        }, 800);
-    };
-
-    const fetchSearchResults = async (value: string) => {
-        setSearchLoading(true);
-        try {
-            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value)}`);
-            const data = await response.json();
-            setSearchResults(data || []);
-        } catch (error) {
-            console.error("Search failed", error);
-            message.error('搜索失败');
-        } finally {
-            setSearchLoading(false);
-        }
-    };
-
     const handleSelectResult = (item: any) => {
         const lat = parseFloat(item.lat);
         const lng = parseFloat(item.lon);
@@ -128,141 +141,6 @@ export default function PlanMap() {
         if (spot.lat && spot.lng) {
             setMapCenter([spot.lat, spot.lng]);
             setMapZoom(15);
-        }
-    };
-
-    const handlePickLocation = (spot: Spot) => {
-        setPickingLocationSpot(spot);
-        message.info(`请在地图上点击为"${spot.name}"选择位置`);
-    };
-
-    const handleMapClick = (lat: number, lng: number) => {
-        if (pickingLocationSpot) {
-            const updatedSpot = { ...pickingLocationSpot, lat, lng };
-            handleSaveSpot(updatedSpot);
-            setPickingLocationSpot(null);
-            message.success(`已更新"${updatedSpot.name}"的位置`);
-        }
-    };
-
-    const handleAddSpotRequest = (lat: number, lng: number) => {
-        setTempLatLng({ lat, lng });
-        setIsAddingSpot(true);
-    };
-
-    const handleAddSpotConfirm = (name: string) => {
-        if (!planId || !tempLatLng) return;
-
-        const newSpot: Spot = {
-            id: Date.now().toString(),
-            name: name,
-            time: '',
-            interior: '',
-            story: '',
-            lat: tempLatLng.lat,
-            lng: tempLatLng.lng,
-        };
-
-        setSpots(prev => {
-            const newSpots = [...prev, newSpot];
-            api.saveSpots(planId, newSpots);
-            return newSpots;
-        });
-
-        setIsAddingSpot(false);
-        setTempLatLng(null);
-    };
-
-    const handleMarkLocation = (lat: number, lng: number) => {
-        if (!planId) return;
-        const newSpot: Spot = {
-            id: Date.now().toString(),
-            name: '标记位置',
-            time: '',
-            interior: '',
-            story: '',
-            lat: lat,
-            lng: lng,
-            icon: 'flag',
-            hide_in_list: true,
-        };
-        setSpots(prev => {
-            const newSpots = [...prev, newSpot];
-            api.saveSpots(planId, newSpots);
-            return newSpots;
-        });
-        message.success("已标记位置");
-    };
-
-    const handleEditSpot = (spot: Spot) => {
-        setEditingSpot(spot);
-        setIsEditModalOpen(true);
-    };
-
-    const handleSaveSpot = (updatedSpot: Spot) => {
-        if (!planId) return;
-        setSpots(prev => {
-            const newSpots = prev.map(s => s.id === updatedSpot.id ? updatedSpot : s);
-            api.saveSpots(planId, newSpots);
-            return newSpots;
-        });
-        setIsEditModalOpen(false);
-        setEditingSpot(null);
-    };
-
-    const handleDeleteSpot = (spot: Spot) => {
-        if (!planId) return;
-        setSpots(prev => {
-            const newSpots = prev.filter(s => s.id !== spot.id);
-            api.saveSpots(planId, newSpots);
-            return newSpots;
-        });
-        setIsEditModalOpen(false);
-        setEditingSpot(null);
-        message.success("已删除地点");
-    };
-
-    const handleSetDestination = (center: L.LatLng, zoom: number, destLat: number, destLng: number) => {
-        setPendingDestination({
-            lat: destLat,
-            lng: destLng,
-            zoom: zoom,
-            center: { lat: center.lat, lng: center.lng }
-        });
-        setIsDestinationModalOpen(true);
-    };
-
-    const handleSaveDestination = async (name: string) => {
-        if (!planId || !pendingDestination) return;
-
-        const newDestination: Destination = {
-            name: name,
-            lat: pendingDestination.lat,
-            lng: pendingDestination.lng,
-        };
-
-        const newMapState: MapState = {
-            lat: pendingDestination.center.lat,
-            lng: pendingDestination.center.lng,
-            zoom: pendingDestination.zoom,
-        };
-
-        const newConfig = {
-            ...config,
-            destination: newDestination,
-            map_state: newMapState,
-        };
-
-        setConfig(newConfig);
-        try {
-            await api.saveConfig(planId, newConfig);
-            message.success("目的地已设置");
-        } catch (e) {
-            console.error(e);
-            message.error("保存失败");
-        } finally {
-            setIsDestinationModalOpen(false);
-            setPendingDestination(null);
         }
     };
 
@@ -289,7 +167,10 @@ export default function PlanMap() {
                 onSelectResult={handleSelectResult}
                 spots={spots}
                 onSelectSpot={handleSelectSpot}
+                onReorderSpots={handleReorderSpots}
                 onPickLocation={handlePickLocation}
+                pickingLocationSpot={pickingLocationSpot}
+                onCancelPickLocation={handleCancelPickLocation}
             />
             <Content style={{ position: 'relative' }}>
                 <MapViewer
@@ -308,6 +189,8 @@ export default function PlanMap() {
                     style={{ height: '100%', width: '100%' }}
                     isPickingLocation={!!pickingLocationSpot}
                     onMapClick={handleMapClick}
+                    provider={mapProvider}
+                    onProviderChange={setMapProvider}
                 />
             </Content>
 
@@ -328,10 +211,7 @@ export default function PlanMap() {
                 open={isDestinationModalOpen}
                 initialName={config.destination?.name}
                 onOk={handleSaveDestination}
-                onCancel={() => {
-                    setIsDestinationModalOpen(false);
-                    setPendingDestination(null);
-                }}
+                onCancel={closeDestinationModal}
             />
         </Layout>
     );

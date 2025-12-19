@@ -73,6 +73,7 @@ type Config struct {
 	MapImage    string       `json:"map_image"`
 	Destination *Destination `json:"destination,omitempty"`
 	MapState    *MapState    `json:"map_state,omitempty"`
+	MapProvider string       `json:"map_provider,omitempty"`
 }
 
 type Destination struct {
