@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Layout, List, Card, Button, Input, Modal, Typography, Popconfirm, Spin, Empty, Form, InputNumber } from 'antd';
+import { Layout, List, Card, Button, Input, Modal, Typography, Popconfirm, Spin, Empty, Form } from 'antd';
 import { PlusOutlined, DeleteOutlined, RightOutlined, EditOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { api } from './api';
@@ -27,29 +27,8 @@ export default function PlanList() {
     const loadPlans = async () => {
         try {
             const data = await api.getPlans();
-            // Sort by order if present, otherwise by created_at desc (newest first)
-            // Wait, requirement: default by created time. If order set, by order.
-            // Let's implement robust sorting:
-            // 1. Filter plans with order > 0 and order = 0 (or undefined)
-            // 2. Sort "ordered" plans by order ascending.
-            // 3. Sort "unordered" plans by created_at descending (or ascending? usually newest first is better)
-            // 4. Combine: ordered first, then unordered? Or how?
-            // "如果设置了序号，则按序号排序" implies precedence.
-            // Let's assume order > 0 means "pinned" or "ordered". 0 means default.
-            // We sort by: Order (asc, non-zero), then CreatedAt (desc/asc).
-            // Actually, usually users want custom ordered items at top.
-
+            // Sort by created_at desc (newest first)
             const sorted = (data || []).sort((a, b) => {
-                const orderA = a.order || 0;
-                const orderB = b.order || 0;
-
-                if (orderA !== 0 && orderB !== 0) {
-                    return orderA - orderB;
-                }
-                if (orderA !== 0) return -1; // A has order, comes first
-                if (orderB !== 0) return 1;  // B has order, comes first
-
-                // Both 0, sort by created_at descending (newest first)
                 return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
             });
 
@@ -69,7 +48,7 @@ export default function PlanList() {
             loadPlans();
             setIsCreating(false);
             setNewPlanName('');
-            navigate(`/plan/${plan.id}`);
+            navigate(`/plans/${plan.id}`);
         } catch (e) {
             console.error("Failed to create plan", e);
         }
@@ -133,18 +112,13 @@ export default function PlanList() {
                                         <Popconfirm title="确定删除该计划吗?" onConfirm={() => handleDelete(item.id)} okText="是" cancelText="否">
                                             <Button type="text" danger icon={<DeleteOutlined />}>删除</Button>
                                         </Popconfirm>,
-                                        <Button type="link" onClick={() => navigate(`/plan/${item.id}`)}>
+                                        <Button type="link" onClick={() => navigate(`/plans/${item.id}`)}>
                                             进入计划 <RightOutlined />
                                         </Button>
                                     ]}
                                 >
                                     <Card.Meta
-                                        title={
-                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                <span style={{ fontSize: '1.2em' }}>{item.name}</span>
-                                                {item.order && item.order > 0 ? <span style={{ fontSize: '0.8em', color: '#999' }}>序号: {item.order}</span> : null}
-                                            </div>
-                                        }
+                                        title={<span style={{ fontSize: '1.2em' }}>{item.name}</span>}
                                         description={`创建时间: ${new Date(item.created_at).toLocaleString()}`}
                                     />
                                 </Card>
@@ -180,9 +154,6 @@ export default function PlanList() {
                     <Form form={editForm} layout="vertical">
                         <Form.Item name="name" label="计划名称" rules={[{ required: true }]}>
                             <Input />
-                        </Form.Item>
-                        <Form.Item name="order" label="序号 (越小越靠前，0表示默认)">
-                            <InputNumber min={0} style={{ width: '100%' }} />
                         </Form.Item>
                     </Form>
                 </Modal>

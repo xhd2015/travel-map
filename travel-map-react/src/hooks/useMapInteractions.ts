@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { message } from 'antd';
 import L from 'leaflet';
-import type { Spot, Config, Destination, MapState } from '../api';
+import type { Spot, Config, DestinationConfig, MapState } from '../api';
 
 interface UseMapInteractionsProps {
     planId: string;
@@ -160,7 +160,7 @@ export const useMapInteractions = ({
     const handleSaveDestination = (name: string) => {
         if (!planId || !pendingDestination) return;
 
-        const newDestination: Destination = {
+        const newDestination: DestinationConfig = {
             name: name,
             lat: pendingDestination.lat,
             lng: pendingDestination.lng,

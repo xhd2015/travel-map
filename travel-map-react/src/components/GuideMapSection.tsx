@@ -4,6 +4,7 @@ import { PlusOutlined, UploadOutlined, QuestionCircleOutlined } from '@ant-desig
 import type { GuideImage } from '../api';
 import { api } from '../api';
 import { useParams } from 'react-router-dom';
+import { GUIDE_MAP_HELP } from './help';
 
 interface GuideMapSectionProps {
     images: GuideImage[];
@@ -11,14 +12,14 @@ interface GuideMapSectionProps {
 }
 
 export const GuideMapSection = ({ images, onSave }: GuideMapSectionProps) => {
-    const { planId } = useParams<{ planId: string }>();
+    const { planId, destId } = useParams<{ planId: string; destId: string }>();
     const [uploading, setUploading] = useState(false);
 
     const handleUpload = async (file: File) => {
-        if (!planId) return false;
+        if (!planId || !destId) return false;
         setUploading(true);
         try {
-            const url = await api.uploadGuideImage(planId, file);
+            const url = await api.uploadGuideImage(planId, destId, file);
             const newImage = { id: Date.now().toString(), url: url };
             onSave([...images, newImage]);
             message.success('图片上传成功');
@@ -44,7 +45,7 @@ export const GuideMapSection = ({ images, onSave }: GuideMapSectionProps) => {
     const title = (
         <div style={{ display: 'flex', alignItems: 'center' }}>
             <span>导览图</span>
-            <Tooltip title="使用小红书搜索">
+            <Tooltip title={GUIDE_MAP_HELP}>
                 <QuestionCircleOutlined style={{ marginLeft: 8, color: '#999', cursor: 'pointer' }} />
             </Tooltip>
         </div>

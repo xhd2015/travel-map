@@ -12,6 +12,13 @@ type Plan struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
 	CreatedAt string `json:"created_at"`
+	// Plan might have description etc later
+}
+
+type Destination struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at"`
 	Order     int    `json:"order"` // 序号
 }
 
@@ -29,7 +36,7 @@ type Spot struct {
 	Icon                string  `json:"icon"`         // default, flag, star, etc.
 	HideInList          bool    `json:"hide_in_list"` // 是否在列表中隐藏
 	Website             string  `json:"website"`      // 官网
-	Rating              int     `json:"rating"`       // 星级 1-5
+	Rating              float64 `json:"rating"`       // 星级 1-5
 }
 
 type Food struct {
@@ -37,7 +44,7 @@ type Food struct {
 	Name                   string  `json:"name"`
 	Time                   string  `json:"time"`
 	Type                   string  `json:"type"`                    // 菜系/类型
-	Rating                 int     `json:"rating"`                  // 星级 1-5
+	Rating                 float64 `json:"rating"`                  // 星级 1-5
 	Comment                string  `json:"comment"`                 // 评价/推荐菜
 	RecommendedRestaurants string  `json:"recommended_restaurants"` // 推荐餐厅
 	ReservationRequired    bool    `json:"reservation_required"`    // 需预约
@@ -70,13 +77,13 @@ type Reference struct {
 }
 
 type Config struct {
-	MapImage    string       `json:"map_image"`
-	Destination *Destination `json:"destination,omitempty"`
-	MapState    *MapState    `json:"map_state,omitempty"`
-	MapProvider string       `json:"map_provider,omitempty"`
+	MapImage    string             `json:"map_image"`
+	Destination *DestinationConfig `json:"destination,omitempty"`
+	MapState    *MapState          `json:"map_state,omitempty"`
+	MapProvider string             `json:"map_provider,omitempty"`
 }
 
-type Destination struct {
+type DestinationConfig struct {
 	Name string  `json:"name"`
 	Lat  float64 `json:"lat"`
 	Lng  float64 `json:"lng"`
@@ -97,6 +104,14 @@ type GuideImage struct {
 type Schedule struct {
 	ID      string `json:"id"`
 	Content string `json:"content"`
+}
+
+type ItineraryItem struct {
+	ID          string `json:"id"`
+	Time        string `json:"time"`
+	Activity    string `json:"activity"`
+	Description string `json:"description"`
+	Reference   string `json:"reference"`
 }
 
 // GlobalStore manages plans
@@ -190,33 +205,6 @@ func (s *GlobalStore) UpdatePlan(id string, update Plan) error {
 			if update.Name != "" {
 				plans[i].Name = update.Name
 			}
-			if update.Order != 0 {
-				plans[i].Order = update.Order
-			}
-			// Special handling for order=0 if we want to allow unsetting it?
-			// For now assuming 0 is default/unset. If user sets 0, it means no order.
-			// But if update.Order is 0, it might mean field missing.
-			// Let's assume frontend sends full object or specific fields.
-			// If JSON unmarshal, 0 is default.
-			// Let's just update fields provided. But Go struct doesn't know "provided" vs "zero value" easily without pointers.
-			// Since we only added Order, let's look at frontend.
-			// We can just overwrite the plan with new data if we pass the full plan.
-			// Or simple approach: Just save the list with modifications.
-
-			// Actually, to support partial updates properly without pointers for primitives (int), it's tricky.
-			// But for Order, let's assume we want to update it.
-			// Let's change UpdatePlan to take the FULL modified plan list or just modify the specific plan in memory and save.
-			// The caller `server.go` will handle unmarshaling.
-			// Let's make this method simple: Update the specific plan with ID.
-
-			// Re-approach: Let's trust the input `update` contains the values we want to set.
-			// If Order is 0, maybe we mean 0.
-			plans[i].Order = update.Order
-			// Name is always present?
-			if update.Name != "" {
-				plans[i].Name = update.Name
-			}
-
 			return s.SavePlans(plans)
 		}
 	}
@@ -245,7 +233,7 @@ func (s *GlobalStore) GetPlanStore(planID string) *PlanStore {
 	return &PlanStore{Dir: filepath.Join(s.Dir, "plans", planID)}
 }
 
-// PlanStore manages data for a specific plan
+// PlanStore manages data for a specific plan (which contains destinations)
 type PlanStore struct {
 	Dir string
 }
@@ -256,10 +244,127 @@ func (s *PlanStore) EnsureDir() error {
 			return err
 		}
 	}
+	// Ensure destinations directory
+	destDir := filepath.Join(s.Dir, "destinations")
+	if _, err := os.Stat(destDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(destDir, 0755); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
-func (s *PlanStore) loadFile(filename string, v interface{}) error {
+func (s *PlanStore) ListDestinations() ([]Destination, error) {
+	if err := s.EnsureDir(); err != nil {
+		return nil, err
+	}
+	path := filepath.Join(s.Dir, "destinations.json")
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return []Destination{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var dests []Destination
+	if len(data) == 0 {
+		return []Destination{}, nil
+	}
+	if err := json.Unmarshal(data, &dests); err != nil {
+		return nil, err
+	}
+	return dests, nil
+}
+
+func (s *PlanStore) SaveDestinations(dests []Destination) error {
+	if err := s.EnsureDir(); err != nil {
+		return err
+	}
+	path := filepath.Join(s.Dir, "destinations.json")
+	data, err := json.MarshalIndent(dests, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+func (s *PlanStore) CreateDestination(name string) (Destination, error) {
+	dests, err := s.ListDestinations()
+	if err != nil {
+		return Destination{}, err
+	}
+	newDest := Destination{
+		ID:        fmt.Sprintf("%d", time.Now().UnixMilli()),
+		Name:      name,
+		CreatedAt: time.Now().Format(time.RFC3339),
+		Order:     len(dests),
+	}
+	dests = append(dests, newDest)
+	if err := s.SaveDestinations(dests); err != nil {
+		return Destination{}, err
+	}
+	// Ensure destination directory exists
+	destStore := s.GetDestinationStore(newDest.ID)
+	if err := destStore.EnsureDir(); err != nil {
+		return Destination{}, err
+	}
+	return newDest, nil
+}
+
+func (s *PlanStore) UpdateDestination(id string, update Destination) error {
+	dests, err := s.ListDestinations()
+	if err != nil {
+		return err
+	}
+	for i, d := range dests {
+		if d.ID == id {
+			if update.Name != "" {
+				dests[i].Name = update.Name
+			}
+			dests[i].Order = update.Order
+			return s.SaveDestinations(dests)
+		}
+	}
+	return fmt.Errorf("destination not found")
+}
+
+func (s *PlanStore) DeleteDestination(id string) error {
+	dests, err := s.ListDestinations()
+	if err != nil {
+		return err
+	}
+	var newDests []Destination
+	for _, d := range dests {
+		if d.ID != id {
+			newDests = append(newDests, d)
+		}
+	}
+	if err := s.SaveDestinations(newDests); err != nil {
+		return err
+	}
+	// Remove directory
+	return os.RemoveAll(filepath.Join(s.Dir, "destinations", id))
+}
+
+func (s *PlanStore) GetDestinationStore(destID string) *DestinationStore {
+	return &DestinationStore{Dir: filepath.Join(s.Dir, "destinations", destID)}
+}
+
+// DestinationStore manages data for a specific destination (was PlanStore)
+type DestinationStore struct {
+	Dir string
+}
+
+func (s *DestinationStore) EnsureDir() error {
+	if _, err := os.Stat(s.Dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(s.Dir, 0755); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *DestinationStore) loadFile(filename string, v interface{}) error {
 	path := filepath.Join(s.Dir, filename)
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -274,7 +379,7 @@ func (s *PlanStore) loadFile(filename string, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
 
-func (s *PlanStore) saveFile(filename string, v interface{}) error {
+func (s *DestinationStore) saveFile(filename string, v interface{}) error {
 	if err := s.EnsureDir(); err != nil {
 		return err
 	}
@@ -286,7 +391,7 @@ func (s *PlanStore) saveFile(filename string, v interface{}) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-func (s *PlanStore) LoadSpots() ([]Spot, error) {
+func (s *DestinationStore) LoadSpots() ([]Spot, error) {
 	var spots []Spot
 	err := s.loadFile("spots.json", &spots)
 	if spots == nil {
@@ -295,11 +400,11 @@ func (s *PlanStore) LoadSpots() ([]Spot, error) {
 	return spots, err
 }
 
-func (s *PlanStore) SaveSpots(spots []Spot) error {
+func (s *DestinationStore) SaveSpots(spots []Spot) error {
 	return s.saveFile("spots.json", spots)
 }
 
-func (s *PlanStore) LoadFoods() ([]Food, error) {
+func (s *DestinationStore) LoadFoods() ([]Food, error) {
 	var foods []Food
 	err := s.loadFile("foods.json", &foods)
 	if foods == nil {
@@ -308,11 +413,11 @@ func (s *PlanStore) LoadFoods() ([]Food, error) {
 	return foods, err
 }
 
-func (s *PlanStore) SaveFoods(foods []Food) error {
+func (s *DestinationStore) SaveFoods(foods []Food) error {
 	return s.saveFile("foods.json", foods)
 }
 
-func (s *PlanStore) LoadRoutes() ([]Route, error) {
+func (s *DestinationStore) LoadRoutes() ([]Route, error) {
 	var routes []Route
 	err := s.loadFile("routes.json", &routes)
 	if routes == nil {
@@ -321,11 +426,11 @@ func (s *PlanStore) LoadRoutes() ([]Route, error) {
 	return routes, err
 }
 
-func (s *PlanStore) SaveRoutes(routes []Route) error {
+func (s *DestinationStore) SaveRoutes(routes []Route) error {
 	return s.saveFile("routes.json", routes)
 }
 
-func (s *PlanStore) LoadQuestions() ([]Question, error) {
+func (s *DestinationStore) LoadQuestions() ([]Question, error) {
 	var questions []Question
 	err := s.loadFile("questions.json", &questions)
 	if questions == nil {
@@ -334,11 +439,11 @@ func (s *PlanStore) LoadQuestions() ([]Question, error) {
 	return questions, err
 }
 
-func (s *PlanStore) SaveQuestions(questions []Question) error {
+func (s *DestinationStore) SaveQuestions(questions []Question) error {
 	return s.saveFile("questions.json", questions)
 }
 
-func (s *PlanStore) LoadReferences() ([]Reference, error) {
+func (s *DestinationStore) LoadReferences() ([]Reference, error) {
 	var references []Reference
 	err := s.loadFile("references.json", &references)
 	if references == nil {
@@ -347,21 +452,21 @@ func (s *PlanStore) LoadReferences() ([]Reference, error) {
 	return references, err
 }
 
-func (s *PlanStore) SaveReferences(references []Reference) error {
+func (s *DestinationStore) SaveReferences(references []Reference) error {
 	return s.saveFile("references.json", references)
 }
 
-func (s *PlanStore) LoadConfig() (Config, error) {
+func (s *DestinationStore) LoadConfig() (Config, error) {
 	var config Config
 	err := s.loadFile("config.json", &config)
 	return config, err
 }
 
-func (s *PlanStore) SaveConfig(config Config) error {
+func (s *DestinationStore) SaveConfig(config Config) error {
 	return s.saveFile("config.json", config)
 }
 
-func (s *PlanStore) LoadGuideImages() ([]GuideImage, error) {
+func (s *DestinationStore) LoadGuideImages() ([]GuideImage, error) {
 	var images []GuideImage
 	err := s.loadFile("guide_images.json", &images)
 	if images == nil {
@@ -370,11 +475,11 @@ func (s *PlanStore) LoadGuideImages() ([]GuideImage, error) {
 	return images, err
 }
 
-func (s *PlanStore) SaveGuideImages(images []GuideImage) error {
+func (s *DestinationStore) SaveGuideImages(images []GuideImage) error {
 	return s.saveFile("guide_images.json", images)
 }
 
-func (s *PlanStore) LoadSchedules() ([]Schedule, error) {
+func (s *DestinationStore) LoadSchedules() ([]Schedule, error) {
 	var schedules []Schedule
 	err := s.loadFile("schedules.json", &schedules)
 	if schedules == nil {
@@ -383,6 +488,19 @@ func (s *PlanStore) LoadSchedules() ([]Schedule, error) {
 	return schedules, err
 }
 
-func (s *PlanStore) SaveSchedules(schedules []Schedule) error {
+func (s *DestinationStore) SaveSchedules(schedules []Schedule) error {
 	return s.saveFile("schedules.json", schedules)
+}
+
+func (s *DestinationStore) LoadItineraries() ([]ItineraryItem, error) {
+	var itineraries []ItineraryItem
+	err := s.loadFile("itineraries.json", &itineraries)
+	if itineraries == nil {
+		itineraries = []ItineraryItem{}
+	}
+	return itineraries, err
+}
+
+func (s *DestinationStore) SaveItineraries(itineraries []ItineraryItem) error {
+	return s.saveFile("itineraries.json", itineraries)
 }

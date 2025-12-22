@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { Card, Button, Form, Input, List, Space, Popconfirm, Tooltip } from 'antd';
-import { PlusOutlined, EditOutlined, SaveOutlined, CloseOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined, QuestionCircleOutlined } from '@ant-design/icons';
-import ReactMarkdown from 'react-markdown';
-import remarkBreaks from 'remark-breaks';
+import { useRef, useEffect } from 'react';
+import { Card, Button, List, Space, Popconfirm, Tooltip, Typography } from 'antd';
+import { PlusOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import type { Schedule } from '../api';
+import { SCHEDULE_LIST_HELP } from './help';
+import { SeamlessDebouncedInput } from './common/SeamlessDebouncedInput';
 
 interface ScheduleListSectionProps {
     schedules: Schedule[];
@@ -11,54 +11,24 @@ interface ScheduleListSectionProps {
 }
 
 export const ScheduleListSection = ({ schedules, onSave }: ScheduleListSectionProps) => {
-    const [form] = Form.useForm();
-    const [editingKey, setEditingKey] = useState('');
-    const [newRowId, setNewRowId] = useState<string | null>(null);
+    const schedulesRef = useRef(schedules);
+    useEffect(() => {
+        schedulesRef.current = schedules;
+    }, [schedules]);
 
-    const isEditing = (id: string) => id === editingKey;
-
-    const edit = (record: Schedule) => {
-        form.setFieldsValue({ ...record });
-        setEditingKey(record.id);
-        if (newRowId === record.id) {
-            // keep
-        } else {
-            setNewRowId(null);
-        }
+    const handleUpdate = (id: string, content: string) => {
+        const newData = schedulesRef.current.map((item) => {
+            if (item.id === id) {
+                return { ...item, content };
+            }
+            return item;
+        });
+        onSave(newData);
     };
 
     const handleDelete = (key: string) => {
-        const newData = schedules.filter((item) => item.id !== key);
+        const newData = schedulesRef.current.filter((item) => item.id !== key);
         onSave(newData);
-        if (key === newRowId) {
-            setNewRowId(null);
-        }
-    };
-
-    const cancel = () => {
-        if (editingKey === newRowId) {
-            handleDelete(editingKey);
-        }
-        setEditingKey('');
-        setNewRowId(null);
-    };
-
-    const save = async (key: string) => {
-        try {
-            const row = (await form.validateFields()) as Schedule;
-            const newData = [...schedules];
-            const index = newData.findIndex((item) => key === item.id);
-
-            if (index > -1) {
-                const item = newData[index];
-                newData.splice(index, 1, { ...item, ...row });
-                onSave(newData);
-                setEditingKey('');
-                setNewRowId(null);
-            }
-        } catch (errInfo) {
-            console.log('Validate Failed:', errInfo);
-        }
     };
 
     const handleAdd = () => {
@@ -67,15 +37,12 @@ export const ScheduleListSection = ({ schedules, onSave }: ScheduleListSectionPr
             id: newKey,
             content: '',
         };
-        onSave([...schedules, newSchedule]);
-        setEditingKey(newKey);
-        setNewRowId(newKey);
-        form.setFieldsValue(newSchedule);
+        onSave([...schedulesRef.current, newSchedule]);
     };
 
     const moveUp = (index: number) => {
         if (index === 0) return;
-        const newData = [...schedules];
+        const newData = [...schedulesRef.current];
         const temp = newData[index];
         newData[index] = newData[index - 1];
         newData[index - 1] = temp;
@@ -83,8 +50,8 @@ export const ScheduleListSection = ({ schedules, onSave }: ScheduleListSectionPr
     };
 
     const moveDown = (index: number) => {
-        if (index === schedules.length - 1) return;
-        const newData = [...schedules];
+        if (index === schedulesRef.current.length - 1) return;
+        const newData = [...schedulesRef.current];
         const temp = newData[index];
         newData[index] = newData[index + 1];
         newData[index + 1] = temp;
@@ -94,7 +61,7 @@ export const ScheduleListSection = ({ schedules, onSave }: ScheduleListSectionPr
     const title = (
         <div style={{ display: 'flex', alignItems: 'center' }}>
             <span>计划</span>
-            <Tooltip title="先搜索景点，再确定导览图，最后确定行程表">
+            <Tooltip title={SCHEDULE_LIST_HELP}>
                 <QuestionCircleOutlined style={{ marginLeft: 8, color: '#999', cursor: 'pointer' }} />
             </Tooltip>
         </div>
@@ -102,55 +69,51 @@ export const ScheduleListSection = ({ schedules, onSave }: ScheduleListSectionPr
 
     return (
         <Card title={title} bordered={false}>
-            <Form form={form} component={false}>
-                <List
-                    itemLayout="vertical"
-                    dataSource={schedules}
-                    renderItem={(item, index) => {
-                        const editable = isEditing(item.id);
-                        return (
-                            <List.Item
-                                key={item.id}
-                                actions={[
-                                    editable ? (
-                                        <Space key="save-cancel">
-                                            <a onClick={() => save(item.id)}><SaveOutlined /> 保存</a>
-                                            <a onClick={cancel} style={{ color: 'gray' }}><CloseOutlined /> 取消</a>
-                                        </Space>
-                                    ) : (
-                                        <Space key="edit-delete">
-                                            <a onClick={() => edit(item)}><EditOutlined /> 编辑</a>
-                                            <a onClick={() => moveUp(index)} style={{ color: index === 0 ? 'lightgray' : undefined, cursor: index === 0 ? 'default' : 'pointer' }}><ArrowUpOutlined /> 上移</a>
-                                            <a onClick={() => moveDown(index)} style={{ color: index === schedules.length - 1 ? 'lightgray' : undefined, cursor: index === schedules.length - 1 ? 'default' : 'pointer' }}><ArrowDownOutlined /> 下移</a>
-                                            <Popconfirm title="确定删除吗?" onConfirm={() => handleDelete(item.id)}>
-                                                <a style={{ color: 'red' }}><DeleteOutlined /> 删除</a>
-                                            </Popconfirm>
-                                        </Space>
-                                    )
-                                ]}
-                            >
-                                {editable ? (
-                                    <Form.Item name="content" rules={[{ required: true, message: '请输入内容' }]}>
-                                        <Input.TextArea autoSize={{ minRows: 2, maxRows: 10 }} />
-                                    </Form.Item>
-                                ) : (
-                                    <div style={{ color: 'rgba(0, 0, 0, 0.88)' }}>
-                                        <ReactMarkdown remarkPlugins={[remarkBreaks]}>
-                                            {item.content}
-                                        </ReactMarkdown>
-                                    </div>
-                                )}
-                            </List.Item>
-                        );
-                    }}
-                    footer={
-                        <Button type="dashed" onClick={handleAdd} block icon={<PlusOutlined />}>
-                            添加计划
-                        </Button>
-                    }
-                />
-            </Form>
+            <List
+                itemLayout="vertical"
+                dataSource={schedules}
+                renderItem={(item, index) => {
+                    return (
+                        <List.Item
+                            key={item.id}
+                            actions={[
+                                <Space key="edit-delete">
+                                    <Typography.Link
+                                        disabled={index === 0}
+                                        onClick={() => moveUp(index)}
+                                    >
+                                        <ArrowUpOutlined /> 上移
+                                    </Typography.Link>
+                                    <Typography.Link
+                                        disabled={index === schedules.length - 1}
+                                        onClick={() => moveDown(index)}
+                                    >
+                                        <ArrowDownOutlined /> 下移
+                                    </Typography.Link>
+                                    <Popconfirm title="确定删除吗?" onConfirm={() => handleDelete(item.id)}>
+                                        <Typography.Link type="danger">
+                                            <DeleteOutlined /> 删除
+                                        </Typography.Link>
+                                    </Popconfirm>
+                                </Space>
+                            ]}
+                        >
+                            <SeamlessDebouncedInput
+                                value={item.content}
+                                onChange={(val) => handleUpdate(item.id, val)}
+                                textarea
+                                autoSize={{ minRows: 2, maxRows: 10 }}
+                                placeholder="输入计划内容..."
+                            />
+                        </List.Item>
+                    );
+                }}
+                footer={
+                    <Button type="dashed" onClick={handleAdd} block icon={<PlusOutlined />}>
+                        添加计划
+                    </Button>
+                }
+            />
         </Card>
     );
 };
-

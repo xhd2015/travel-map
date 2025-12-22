@@ -1,63 +1,15 @@
-import { useState, useEffect } from 'react';
-import { Card, Table, Button, Form, Input, Popconfirm, Space, Select, Tag, Popover, Tooltip, Rate } from 'antd';
-import { PlusOutlined, EditOutlined, SaveOutlined, CloseOutlined, DeleteOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { useState, useRef, useEffect } from 'react';
+import { Card, Table, Button, Input, Popconfirm, Space, Select, Tag, Popover, Tooltip, Rate, Typography } from 'antd';
+import { PlusOutlined, DeleteOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import type { Spot } from '../api';
+import { getSpotListHelp } from './help';
+import { SeamlessDebouncedInput } from './common/SeamlessDebouncedInput';
 
 interface SpotListSectionProps {
     spots: Spot[];
     onSave: (s: Spot[]) => void;
     destinationName?: string;
 }
-
-interface EditableCellProps extends React.HTMLAttributes<HTMLElement> {
-    editing: boolean;
-    dataIndex: string;
-    title: string;
-    inputType: 'text' | 'boolean' | 'rate';
-    record: Spot;
-    index: number;
-    children: React.ReactNode;
-}
-
-const EditableCell: React.FC<EditableCellProps> = ({
-    editing,
-    dataIndex,
-    title,
-    inputType,
-    children,
-    ...restProps
-}) => {
-    let inputNode = <Input />;
-    if (inputType === 'boolean') {
-        inputNode = (
-            <Select>
-                <Select.Option value={true}>是</Select.Option>
-                <Select.Option value={false}>否</Select.Option>
-            </Select>
-        );
-    } else if (inputType === 'rate') {
-        inputNode = <Rate />;
-    } else if (dataIndex === 'story' || dataIndex === 'reservation_info') {
-        inputNode = <Input.TextArea autoSize />;
-    }
-
-    return (
-        <td {...restProps}>
-            {editing ? (
-                <Form.Item
-                    name={dataIndex}
-                    style={{ margin: 0 }}
-                    rules={[{ required: dataIndex === 'name', message: `请输入${title}!` }]}
-                    valuePropName={inputType === 'boolean' ? 'value' : (inputType === 'rate' ? 'value' : 'value')}
-                >
-                    {inputNode}
-                </Form.Item>
-            ) : (
-                children
-            )}
-        </td>
-    );
-};
 
 const ReservationDetails = ({ record, onSave }: { record: Spot, onSave: (val: string) => void }) => {
     const [visible, setVisible] = useState(false);
@@ -122,66 +74,25 @@ const ReservationDetails = ({ record, onSave }: { record: Spot, onSave: (val: st
 };
 
 export const SpotListSection = ({ spots, onSave, destinationName }: SpotListSectionProps) => {
-    const [form] = Form.useForm();
-    const [editingKey, setEditingKey] = useState('');
-    const [newRowId, setNewRowId] = useState<string | null>(null);
+    // Ref to hold latest spots for safe concurrent updates
+    const spotsRef = useRef(spots);
+    useEffect(() => {
+        spotsRef.current = spots;
+    }, [spots]);
 
-    const isEditing = (record: Spot) => record.id === editingKey;
-
-    const edit = (record: Spot) => {
-        form.setFieldsValue({
-            ...record,
-            reservation_required: record.reservation_required ?? false
+    const handleUpdate = (id: string, field: keyof Spot, value: any) => {
+        const newData = spotsRef.current.map((item) => {
+            if (item.id === id) {
+                return { ...item, [field]: value };
+            }
+            return item;
         });
-        setEditingKey(record.id);
-        if (newRowId === record.id) {
-            // keep newRowId
-        } else {
-            setNewRowId(null);
-        }
+        onSave(newData);
     };
 
     const handleDelete = (key: string) => {
-        const newData = spots.filter((item) => item.id !== key);
+        const newData = spotsRef.current.filter((item) => item.id !== key);
         onSave(newData);
-        if (key === newRowId) {
-            setNewRowId(null);
-        }
-    };
-
-    const cancel = () => {
-        if (editingKey === newRowId) {
-            handleDelete(editingKey);
-        }
-        setEditingKey('');
-        setNewRowId(null);
-    };
-
-    const save = async (key: string) => {
-        try {
-            const row = (await form.validateFields()) as Spot;
-            const newData = [...spots];
-            const index = newData.findIndex((item) => key === item.id);
-
-            if (index > -1) {
-                const item = newData[index];
-                newData.splice(index, 1, { ...item, ...row });
-                onSave(newData);
-                setEditingKey('');
-                setNewRowId(null);
-            }
-        } catch (errInfo) {
-            console.log('Validate Failed:', errInfo);
-        }
-    };
-
-    const handleUpdateReservationInfo = (id: string, info: string) => {
-        const newData = [...spots];
-        const index = newData.findIndex((item) => id === item.id);
-        if (index > -1) {
-            newData[index] = { ...newData[index], reservation_info: info };
-            onSave(newData);
-        }
     };
 
     const handleAdd = () => {
@@ -197,48 +108,107 @@ export const SpotListSection = ({ spots, onSave, destinationName }: SpotListSect
             reservation_required: false,
             reservation_info: '',
         };
-        // Add to list immediately
-        onSave([...spots, newSpot]);
-        // Set as editing
-        setEditingKey(newKey);
-        setNewRowId(newKey);
-        form.setFieldsValue(newSpot);
+        onSave([...spotsRef.current, newSpot]);
     };
 
     const columns = [
-        { title: '名称', dataIndex: 'name', key: 'name', width: '15%', editable: true },
+        {
+            title: '名称',
+            dataIndex: 'name',
+            key: 'name',
+            width: '15%',
+            render: (text: string, record: Spot) => (
+                <SeamlessDebouncedInput
+                    value={text}
+                    onChange={(val) => handleUpdate(record.id, 'name', val)}
+                />
+            )
+        },
         {
             title: '星级',
             dataIndex: 'rating',
             key: 'rating',
             width: '200px',
-            editable: true,
-            render: (rating: number) => <Rate disabled defaultValue={rating} style={{ minWidth: 150 }} />
+            render: (rating: number, record: Spot) => (
+                <Rate
+                    allowHalf
+                    value={rating}
+                    onChange={(val) => handleUpdate(record.id, 'rating', val)}
+                    style={{ minWidth: 150 }}
+                />
+            )
         },
-        { title: '开放时间', dataIndex: 'time', key: 'time', width: '10%', editable: true },
-        { title: '介绍', dataIndex: 'interior', key: 'interior', width: '25%', editable: true },
-        { title: '游玩时长', dataIndex: 'play_time', key: 'play_time', width: '10%', editable: true },
+        {
+            title: '开放时间',
+            dataIndex: 'time',
+            key: 'time',
+            width: '10%',
+            render: (text: string, record: Spot) => (
+                <SeamlessDebouncedInput
+                    value={text}
+                    onChange={(val) => handleUpdate(record.id, 'time', val)}
+                />
+            )
+        },
+        {
+            title: '介绍',
+            dataIndex: 'interior',
+            key: 'interior',
+            width: '25%',
+            render: (text: string, record: Spot) => (
+                <SeamlessDebouncedInput
+                    value={text}
+                    onChange={(val) => handleUpdate(record.id, 'interior', val)}
+                    textarea
+                    autoSize={{ minRows: 1, maxRows: 6 }}
+                />
+            )
+        },
+        {
+            title: '游玩时长',
+            dataIndex: 'play_time',
+            key: 'play_time',
+            width: '10%',
+            render: (text: string, record: Spot) => (
+                <SeamlessDebouncedInput
+                    value={text}
+                    onChange={(val) => handleUpdate(record.id, 'play_time', val)}
+                />
+            )
+        },
         {
             title: '官网',
             dataIndex: 'website',
             key: 'website',
             width: '10%',
-            editable: true,
-            render: (text: string) => text ? <a href={text} target="_blank" rel="noopener noreferrer">链接</a> : '-'
+            render: (text: string, record: Spot) => (
+                <SeamlessDebouncedInput
+                    value={text}
+                    onChange={(val) => handleUpdate(record.id, 'website', val)}
+                    placeholder="https://"
+                />
+            )
         },
         {
             title: '需预约',
             dataIndex: 'reservation_required',
             key: 'reservation_required',
             width: '12%',
-            editable: true,
             render: (val: boolean, record: Spot) => (
                 <Space>
-                    {val ? <Tag color="red">是</Tag> : <Tag color="green">否</Tag>}
+                    <Select
+                        value={val}
+                        onChange={(newVal) => handleUpdate(record.id, 'reservation_required', newVal)}
+                        bordered={false}
+                        style={{ width: 60 }}
+                    >
+                        <Select.Option value={true}><Tag color="red">是</Tag></Select.Option>
+                        <Select.Option value={false}><Tag color="green">否</Tag></Select.Option>
+                    </Select>
                     {val && (
                         <ReservationDetails
                             record={record}
-                            onSave={(info) => handleUpdateReservationInfo(record.id, info)}
+                            onSave={(info) => handleUpdate(record.id, 'reservation_info', info)}
                         />
                     )}
                 </Space>
@@ -248,55 +218,19 @@ export const SpotListSection = ({ spots, onSave, destinationName }: SpotListSect
             title: '操作',
             dataIndex: 'operation',
             width: '12%',
-            render: (_: any, record: Spot) => {
-                const editable = isEditing(record);
-                return editable ? (
-                    <Space>
-                        <TypographyLink onClick={() => save(record.id)} style={{ marginRight: 8 }}>
-                            <SaveOutlined />
-                        </TypographyLink>
-                        <Popconfirm title="确定取消吗?" onConfirm={cancel}>
-                            <a style={{ color: 'gray' }}><CloseOutlined /></a>
-                        </Popconfirm>
-                    </Space>
-                ) : (
-                    <Space>
-                        <TypographyLink disabled={editingKey !== ''} onClick={() => edit(record)}>
-                            <EditOutlined />
-                        </TypographyLink>
-                        <Popconfirm title="确定删除吗?" onConfirm={() => handleDelete(record.id)}>
-                            <a style={{ color: 'red' }}><DeleteOutlined /></a>
-                        </Popconfirm>
-                    </Space>
-                );
-            },
+            render: (_: any, record: Spot) => (
+                <Space>
+                    <Popconfirm title="确定删除吗?" onConfirm={() => handleDelete(record.id)}>
+                        <Typography.Link type="danger">
+                            <DeleteOutlined />
+                        </Typography.Link>
+                    </Popconfirm>
+                </Space>
+            ),
         },
     ];
 
-    const mergedColumns = columns.map((col) => {
-        if (!col.editable) {
-            return col;
-        }
-        return {
-            ...col,
-            onCell: (record: Spot) => ({
-                record,
-                inputType: col.dataIndex === 'reservation_required' ? 'boolean' : (col.dataIndex === 'rating' ? 'rate' : 'text'),
-                dataIndex: col.dataIndex,
-                title: col.title,
-                editing: isEditing(record),
-            }),
-        };
-    });
-
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const yyyy = tomorrow.getFullYear();
-    const mm = tomorrow.getMonth() + 1;
-    const dd = tomorrow.getDate();
-    const dateStr = `${yyyy}年${mm}月${dd}日`;
-    const dest = destinationName || '目的地';
-    const tooltipText = `使用Deepseek，提示词: 我将于${dateStr}，在${dest}旅游，请列出${dest}的“此生必去”景点，按重要性排序，给出一个表格，包含：景点名，开放时间范围，该景点游玩的意义，历史和典故，是否需要预约，预约方式，游玩方式（步行，观光车，缆车），游玩花费时间`;
+    const tooltipText = getSpotListHelp(destinationName);
 
     const title = (
         <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -309,31 +243,18 @@ export const SpotListSection = ({ spots, onSave, destinationName }: SpotListSect
 
     return (
         <Card title={title} bordered={false}>
-            <Form form={form} component={false}>
-                <Table
-                    components={{
-                        body: {
-                            cell: EditableCell,
-                        },
-                    }}
-                    bordered
-                    dataSource={spots.filter(s => !s.hide_in_list)}
-                    columns={mergedColumns}
-                    rowClassName="editable-row"
-                    pagination={false}
-                    rowKey="id"
-                    footer={() => (
-                        <Button type="dashed" onClick={handleAdd} block icon={<PlusOutlined />}>
-                            添加景点
-                        </Button>
-                    )}
-                />
-            </Form>
+            <Table
+                bordered
+                dataSource={spots.filter(s => !s.hide_in_list)}
+                columns={columns}
+                pagination={false}
+                rowKey="id"
+                footer={() => (
+                    <Button type="dashed" onClick={handleAdd} block icon={<PlusOutlined />}>
+                        添加景点
+                    </Button>
+                )}
+            />
         </Card>
     );
 };
-
-// Simple Typography Link helper
-const TypographyLink = ({ children, ...props }: any) => (
-    <a {...props} style={{ cursor: 'pointer', ...props.style }}>{children}</a>
-);

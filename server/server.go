@@ -238,6 +238,7 @@ func RegisterAPI(mux *http.ServeMux) error {
 
 	// API endpoints
 	mux.HandleFunc("/api/plans", handlePlans)
+	mux.HandleFunc("/api/destinations", handleDestinations)
 	mux.HandleFunc("/api/spots", handleSpots)
 	mux.HandleFunc("/api/foods", handleFoods)
 	mux.HandleFunc("/api/routes", handleRoutes)
@@ -246,6 +247,7 @@ func RegisterAPI(mux *http.ServeMux) error {
 	mux.HandleFunc("/api/config", handleConfig)
 	mux.HandleFunc("/api/guide-images", handleGuideImages)
 	mux.HandleFunc("/api/schedules", handleSchedules)
+	mux.HandleFunc("/api/itineraries", handleItineraries)
 	mux.HandleFunc("/api/upload-guide-image", handleUploadGuideImage)
 	mux.HandleFunc("/api/proxy/search", handleProxySearch)
 	mux.HandleFunc("/ping", handlePing)
@@ -325,8 +327,85 @@ func getPlanStore(r *http.Request) (*store.PlanStore, error) {
 	return globalStore.GetPlanStore(planID), nil
 }
 
-func handleSpots(w http.ResponseWriter, r *http.Request) {
+func handleDestinations(w http.ResponseWriter, r *http.Request) {
 	s, err := getPlanStore(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if r.Method == http.MethodGet {
+		dests, err := s.ListDestinations()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(dests)
+		return
+	}
+	if r.Method == http.MethodPost {
+		var payload struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		newDest, err := s.CreateDestination(payload.Name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(newDest)
+		return
+	}
+	if r.Method == http.MethodPut {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "Missing id", http.StatusBadRequest)
+			return
+		}
+		var update store.Destination
+		if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := s.UpdateDestination(id, update); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method == http.MethodDelete {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "Missing id", http.StatusBadRequest)
+			return
+		}
+		if err := s.DeleteDestination(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func getDestinationStore(r *http.Request) (*store.DestinationStore, error) {
+	planID := r.URL.Query().Get("planId")
+	if planID == "" {
+		return nil, fmt.Errorf("missing planId query parameter")
+	}
+	destID := r.URL.Query().Get("destId")
+	if destID == "" {
+		return nil, fmt.Errorf("missing destId query parameter")
+	}
+	return globalStore.GetPlanStore(planID).GetDestinationStore(destID), nil
+}
+
+func handleSpots(w http.ResponseWriter, r *http.Request) {
+	s, err := getDestinationStore(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -357,7 +436,7 @@ func handleSpots(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleFoods(w http.ResponseWriter, r *http.Request) {
-	s, err := getPlanStore(r)
+	s, err := getDestinationStore(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -388,7 +467,7 @@ func handleFoods(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleRoutes(w http.ResponseWriter, r *http.Request) {
-	s, err := getPlanStore(r)
+	s, err := getDestinationStore(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -419,7 +498,7 @@ func handleRoutes(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleQuestions(w http.ResponseWriter, r *http.Request) {
-	s, err := getPlanStore(r)
+	s, err := getDestinationStore(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -450,7 +529,7 @@ func handleQuestions(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleReferences(w http.ResponseWriter, r *http.Request) {
-	s, err := getPlanStore(r)
+	s, err := getDestinationStore(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -481,7 +560,7 @@ func handleReferences(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleConfig(w http.ResponseWriter, r *http.Request) {
-	s, err := getPlanStore(r)
+	s, err := getDestinationStore(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -512,7 +591,7 @@ func handleConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGuideImages(w http.ResponseWriter, r *http.Request) {
-	s, err := getPlanStore(r)
+	s, err := getDestinationStore(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -543,7 +622,7 @@ func handleGuideImages(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleSchedules(w http.ResponseWriter, r *http.Request) {
-	s, err := getPlanStore(r)
+	s, err := getDestinationStore(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -573,6 +652,37 @@ func handleSchedules(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 }
 
+func handleItineraries(w http.ResponseWriter, r *http.Request) {
+	s, err := getDestinationStore(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if r.Method == http.MethodGet {
+		itineraries, err := s.LoadItineraries()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(itineraries)
+		return
+	}
+	if r.Method == http.MethodPost {
+		var itineraries []store.ItineraryItem
+		if err := json.NewDecoder(r.Body).Decode(&itineraries); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := s.SaveItineraries(itineraries); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
 func handleUploadGuideImage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -590,19 +700,20 @@ func handleUploadGuideImage(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 
 	planID := r.FormValue("planId")
-	if planID == "" {
-		http.Error(w, "Missing planId", http.StatusBadRequest)
+	destID := r.FormValue("destId")
+	if planID == "" || destID == "" {
+		http.Error(w, "Missing planId or destId", http.StatusBadRequest)
 		return
 	}
 
-	planStore := globalStore.GetPlanStore(planID)
-	if err := planStore.EnsureDir(); err != nil {
-		http.Error(w, "Failed to ensure plan directory", http.StatusInternalServerError)
+	destStore := globalStore.GetPlanStore(planID).GetDestinationStore(destID)
+	if err := destStore.EnsureDir(); err != nil {
+		http.Error(w, "Failed to ensure destination directory", http.StatusInternalServerError)
 		return
 	}
 
 	// Create images directory if not exists
-	imagesDir := filepath.Join(planStore.Dir, "images")
+	imagesDir := filepath.Join(destStore.Dir, "images")
 	if err := os.MkdirAll(imagesDir, 0755); err != nil {
 		http.Error(w, "Failed to create images directory", http.StatusInternalServerError)
 		return
@@ -627,8 +738,8 @@ func handleUploadGuideImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Construct URL
-	// Serving from /data/{planId}/images/{filename}
-	url := fmt.Sprintf("/data/plans/%s/images/%s", planID, filename)
+	// Serving from /data/plans/{planId}/destinations/{destId}/images/{filename}
+	url := fmt.Sprintf("/data/plans/%s/destinations/%s/images/%s", planID, destID, filename)
 
 	json.NewEncoder(w).Encode(map[string]string{
 		"url": url,

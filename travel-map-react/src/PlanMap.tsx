@@ -29,7 +29,7 @@ L.Marker.prototype.options.icon = DefaultIcon;
 const { Content } = Layout;
 
 export default function PlanMap() {
-    const { planId } = useParams<{ planId: string }>();
+    const { planId, destId } = useParams<{ planId: string; destId: string }>();
     const navigate = useNavigate();
     const [spots, setSpots] = useState<Spot[]>([]);
     const [config, setConfig] = useState<Config>({ map_image: '' });
@@ -68,7 +68,9 @@ export default function PlanMap() {
         onSaveConfig: async (newConfig) => {
             setConfig(newConfig);
             try {
-                await api.saveConfig(planId!, newConfig);
+                if (planId && destId) {
+                    await api.saveConfig(planId, destId, newConfig);
+                }
             } catch (e) {
                 console.error(e);
                 message.error("保存配置失败");
@@ -77,7 +79,9 @@ export default function PlanMap() {
         onSaveSpots: async (newSpots) => {
             setSpots(newSpots);
             try {
-                await api.saveSpots(planId!, newSpots);
+                if (planId && destId) {
+                    await api.saveSpots(planId, destId, newSpots);
+                }
             } catch (e) {
                 console.error(e);
                 message.error("保存地点失败");
@@ -98,16 +102,16 @@ export default function PlanMap() {
     };
 
     useEffect(() => {
-        if (planId) {
-            loadData(planId);
+        if (planId && destId) {
+            loadData(planId, destId);
         }
-    }, [planId]);
+    }, [planId, destId]);
 
-    const loadData = async (id: string) => {
+    const loadData = async (pId: string, dId: string) => {
         try {
             const [s, c] = await Promise.all([
-                api.getSpots(id),
-                api.getConfig(id),
+                api.getSpots(pId, dId),
+                api.getConfig(pId, dId),
             ]);
             setSpots(s || []);
             setConfig(c || { map_image: '' });
@@ -153,13 +157,13 @@ export default function PlanMap() {
         }
     };
 
-    if (!planId) return <div>Invalid Plan ID</div>;
+    if (!planId || !destId) return <div>Invalid URL</div>;
     if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><Spin size="large" /></div>;
 
     return (
         <Layout style={{ height: '100vh' }} hasSider>
             <PlanMapSidebar
-                onBack={() => navigate(`/plan/${planId}`)}
+                onBack={() => navigate(`/plans/${planId}/destinations/${destId}`)}
                 searchText={searchText}
                 onSearch={handleSearch}
                 searchLoading={searchLoading}

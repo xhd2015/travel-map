@@ -26,13 +26,14 @@ L.Marker.prototype.options.icon = DefaultIcon;
 
 interface MapSectionProps {
     planId: string;
+    destId: string;
     config: Config;
     spots: Spot[];
     onSaveConfig: (c: Config) => void;
     onSaveSpots: (s: Spot[]) => void;
 }
 
-export const MapSection = ({ planId, config, spots, onSaveConfig, onSaveSpots }: MapSectionProps) => {
+export const MapSection = ({ planId, destId, config, spots, onSaveConfig, onSaveSpots }: MapSectionProps) => {
     const navigate = useNavigate();
     const [mapCenter, setMapCenter] = useState<[number, number]>([39.9042, 116.4074]);
     const [mapZoom, setMapZoom] = useState<number>(13);
@@ -117,7 +118,7 @@ export const MapSection = ({ planId, config, spots, onSaveConfig, onSaveSpots }:
             title={title}
             extra={
                 <Space>
-                    <Button icon={<ExpandOutlined />} onClick={() => navigate(`/plan/${planId}/map`)}>详情</Button>
+                    <Button icon={<ExpandOutlined />} onClick={() => navigate(`/plans/${planId}/destinations/${destId}/map`)}>详情</Button>
                 </Space>
             }
             bordered={false}
