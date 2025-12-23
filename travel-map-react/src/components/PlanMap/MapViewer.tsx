@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Button, Popconfirm, Select, message } from 'antd';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, CloseOutlined } from '@ant-design/icons';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import type { Spot, Config } from '../../api';
@@ -231,7 +231,7 @@ const MapResultFlier = ({ target }: { target: SearchResult | null }) => {
     return null;
 };
 
-const SearchResultsList = ({ results, onSelect }: { results: SearchResult[], onSelect: (r: SearchResult) => void }) => {
+const SearchResultsList = ({ results, onSelect, onDismiss }: { results: SearchResult[], onSelect: (r: SearchResult) => void, onDismiss: () => void }) => {
     if (results.length === 0) return null;
     return (
         <div style={{
@@ -247,7 +247,10 @@ const SearchResultsList = ({ results, onSelect }: { results: SearchResult[], onS
             boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
             padding: 8
         }}>
-            <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>搜索结果</div>
+            <div style={{ fontSize: 12, color: '#999', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>搜索结果</span>
+                <Button size="small" type="text" icon={<CloseOutlined />} onClick={onDismiss} />
+            </div>
             {results.map((r, i) => (
                 <div
                     key={r.place_id}
@@ -452,6 +455,10 @@ export const MapViewer: React.FC<MapViewerProps> = ({
         setSelectedResult(result);
     };
 
+    const handleDismissResults = () => {
+        setSearchResults([]);
+    };
+
     return (
         <div style={{ position: 'relative', ...style }}>
             <div style={{
@@ -483,7 +490,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                     onSearch={setSearchQuery}
                 />
             )}
-            <SearchResultsList results={searchResults} onSelect={handleSelectResult} />
+            <SearchResultsList results={searchResults} onSelect={handleSelectResult} onDismiss={handleDismissResults} />
             <MapContainer center={mapCenter} zoom={mapZoom} style={{ height: '100%', width: '100%' }}>
                 <TileLayer
                     attribution={TileProviders[currentProvider].attribution}

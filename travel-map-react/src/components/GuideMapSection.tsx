@@ -5,6 +5,7 @@ import type { GuideImage } from '../api';
 import { api } from '../api';
 import { useParams } from 'react-router-dom';
 import { GUIDE_MAP_HELP } from './help';
+import { ImageUploadModal } from './ImageUploadModal';
 
 interface GuideMapSectionProps {
     images: GuideImage[];
@@ -14,33 +15,24 @@ interface GuideMapSectionProps {
 export const GuideMapSection = ({ images, onSave }: GuideMapSectionProps) => {
     const { planId, destId } = useParams<{ planId: string; destId: string }>();
     const [uploading, setUploading] = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
     const handleUpload = async (file: File) => {
-        if (!planId || !destId) return false;
+        if (!planId || !destId) return;
         setUploading(true);
         try {
             const url = await api.uploadGuideImage(planId, destId, file);
             const newImage = { id: Date.now().toString(), url: url };
             onSave([...images, newImage]);
             message.success('图片上传成功');
+            setIsModalOpen(false);
         } catch (error) {
             console.error(error);
             message.error('图片上传失败');
         } finally {
             setUploading(false);
         }
-        return false; // Prevent auto upload by antd
     };
-
-    const UploadButton = (
-        <Upload
-            showUploadList={false}
-            beforeUpload={handleUpload}
-            accept="image/*"
-        >
-            <Button icon={uploading ? <Spin /> : <UploadOutlined />}>上传图片</Button>
-        </Upload>
-    );
 
     const title = (
         <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -55,7 +47,7 @@ export const GuideMapSection = ({ images, onSave }: GuideMapSectionProps) => {
         <Card title={title} variant="borderless">
             {images.length === 0 ? (
                 <Empty description="暂无导览图">
-                    {UploadButton}
+                    <Button icon={<UploadOutlined />} onClick={() => setIsModalOpen(true)}>上传图片</Button>
                 </Empty>
             ) : (
                 <Row gutter={[16, 16]}>
@@ -74,22 +66,23 @@ export const GuideMapSection = ({ images, onSave }: GuideMapSectionProps) => {
                         </Col>
                     ))}
                     <Col span={24}>
-                        <Upload
-                            showUploadList={false}
-                            beforeUpload={handleUpload}
-                            accept="image/*"
+                        <Button
+                            type="dashed"
+                            style={{ width: '100%', height: '100px' }}
+                            onClick={() => setIsModalOpen(true)}
                         >
-                            <Button
-                                type="dashed"
-                                style={{ width: '100%', height: '100px' }}
-                                disabled={uploading}
-                            >
-                                {uploading ? <Spin /> : <PlusOutlined style={{ fontSize: '24px' }} />}
-                            </Button>
-                        </Upload>
+                            <PlusOutlined style={{ fontSize: '24px' }} />
+                        </Button>
                     </Col>
                 </Row>
             )}
+
+            <ImageUploadModal
+                open={isModalOpen}
+                onCancel={() => setIsModalOpen(false)}
+                onOk={handleUpload}
+                loading={uploading}
+            />
         </Card>
     );
 };
