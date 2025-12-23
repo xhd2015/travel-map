@@ -183,7 +183,7 @@ export const FoodListSection = ({ foods, onSave }: FoodListSectionProps) => {
     });
 
     return (
-        <Card title="美食列表" bordered={false}>
+        <Card title="美食列表" variant="borderless">
             <Form form={form} component={false}>
                 <Table
                     components={{

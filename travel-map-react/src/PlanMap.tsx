@@ -12,6 +12,8 @@ import { DestinationEditModal } from './components/PlanMap/DestinationEditModal'
 import { SpotAddModal } from './components/PlanMap/SpotAddModal';
 import { useMapSearch } from './hooks/useMapSearch';
 import { useMapInteractions } from './hooks/useMapInteractions';
+import { useDebounce } from './hooks/useDebounce';
+import { DEFAULT_MAP_CENTER } from './utils/mapConstants';
 
 // Fix leaflet marker icons
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -34,7 +36,7 @@ export default function PlanMap() {
     const [spots, setSpots] = useState<Spot[]>([]);
     const [config, setConfig] = useState<Config>({ map_image: '' });
     const [loading, setLoading] = useState(true);
-    const [mapCenter, setMapCenter] = useState<[number, number]>([39.9042, 116.4074]);
+    const [mapCenter, setMapCenter] = useState<[number, number]>(DEFAULT_MAP_CENTER);
     const [mapZoom, setMapZoom] = useState<number>(13);
     const [searchText, setSearchText] = useState('');
 
@@ -101,6 +103,13 @@ export default function PlanMap() {
         hookHandleSearch(value, immediate);
     };
 
+    // Debounced save
+    const debouncedSaveConfig = useDebounce((newConfig: Config) => {
+        if (planId && destId) {
+            api.saveConfig(planId, destId, newConfig).catch(console.error);
+        }
+    }, 1000);
+
     useEffect(() => {
         if (planId && destId) {
             loadData(planId, destId);
@@ -157,6 +166,27 @@ export default function PlanMap() {
         }
     };
 
+    const handleMapStateChange = (center: { lat: number, lng: number }, zoom: number) => {
+        // Update local state immediately for responsiveness
+        setMapCenter([center.lat, center.lng]);
+        setMapZoom(zoom);
+
+        const newConfig = {
+            ...config,
+            map_state: {
+                lat: center.lat,
+                lng: center.lng,
+                zoom: zoom
+            }
+        };
+
+        // Optimistically update local config to avoid stale state in next timeout
+        setConfig(newConfig);
+
+        // Trigger debounced save
+        debouncedSaveConfig(newConfig);
+    };
+
     if (!planId || !destId) return <div>Invalid URL</div>;
     if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><Spin size="large" /></div>;
 
@@ -195,6 +225,7 @@ export default function PlanMap() {
                     onMapClick={handleMapClick}
                     provider={mapProvider}
                     onProviderChange={setMapProvider}
+                    onMapStateChange={handleMapStateChange}
                 />
             </Content>
 

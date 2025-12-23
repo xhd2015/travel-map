@@ -10,6 +10,8 @@ import { DestinationEditModal } from './PlanMap/DestinationEditModal';
 import { SpotAddModal } from './PlanMap/SpotAddModal';
 import { useMapSearch } from '../hooks/useMapSearch';
 import { useMapInteractions } from '../hooks/useMapInteractions';
+import { useDebounce } from '../hooks/useDebounce';
+import { DEFAULT_MAP_CENTER, isDefaultMapCenterArray } from '../utils/mapConstants';
 
 // Fix leaflet marker icons (ensure loaded)
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -35,7 +37,7 @@ interface MapSectionProps {
 
 export const MapSection = ({ planId, destId, config, spots, onSaveConfig, onSaveSpots }: MapSectionProps) => {
     const navigate = useNavigate();
-    const [mapCenter, setMapCenter] = useState<[number, number]>([39.9042, 116.4074]);
+    const [mapCenter, setMapCenter] = useState<[number, number]>(DEFAULT_MAP_CENTER);
     const [mapZoom, setMapZoom] = useState<number>(13);
     const [searchOptions, setSearchOptions] = useState<{ label: string; value: string; lat: number; lng: number }[]>([]);
 
@@ -76,16 +78,30 @@ export const MapSection = ({ planId, destId, config, spots, onSaveConfig, onSave
         handleSearch
     } = useMapSearch(mapProvider);
 
+    // Debounce map state save
+    const handleMapStateChange = useDebounce((center: { lat: number, lng: number }, zoom: number) => {
+        const newConfig = {
+            ...config,
+            map_state: {
+                lat: center.lat,
+                lng: center.lng,
+                zoom: zoom
+            }
+        };
+        onSaveConfig(newConfig);
+    }, 1000);
+
     // Initialize map state from config
     useEffect(() => {
-        if (config.map_state) {
+        // Only set initial state, do not update on every config change to avoid fighting with user interaction
+        if (config.map_state && isDefaultMapCenterArray(mapCenter)) {
             setMapCenter([config.map_state.lat, config.map_state.lng]);
             setMapZoom(config.map_state.zoom);
-        } else if (config.destination) {
+        } else if (config.destination && isDefaultMapCenterArray(mapCenter)) {
             setMapCenter([config.destination.lat, config.destination.lng]);
             setMapZoom(13); // Default zoom if no map_state
         }
-    }, [config]);
+    }, [config.map_state, config.destination]); // Depend on specific parts, but check current state to avoid overwrite
 
     // Update search options when results change
     useEffect(() => {
@@ -121,7 +137,7 @@ export const MapSection = ({ planId, destId, config, spots, onSaveConfig, onSave
                     <Button icon={<ExpandOutlined />} onClick={() => navigate(`/plans/${planId}/destinations/${destId}/map`)}>详情</Button>
                 </Space>
             }
-            bordered={false}
+            variant="borderless"
         >
             <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16 }}>
                 <Select
@@ -158,6 +174,7 @@ export const MapSection = ({ planId, destId, config, spots, onSaveConfig, onSave
                     style={{ height: '100%', width: '100%' }}
                     provider={mapProvider}
                     onProviderChange={setMapProvider}
+                    onMapStateChange={handleMapStateChange}
                 />
             </div>
 

@@ -73,7 +73,7 @@ export const QuestionListSection = ({ questions, onSave }: QuestionListSectionPr
     };
 
     return (
-        <Card title="问题列表" bordered={false}>
+        <Card title="问题列表" variant="borderless">
             <Form form={form} component={false}>
                 <List
                     itemLayout="vertical"

@@ -155,7 +155,7 @@ export const ItinerarySection = ({ itineraries, onSave, destinationName, spots }
     const title = (
         <div style={{ display: 'flex', alignItems: 'center' }}>
             <span>行程表</span>
-            <Tooltip title={tooltipTitle} overlayStyle={{ maxWidth: '600px' }}>
+            <Tooltip title={tooltipTitle} styles={{ root: { maxWidth: '600px' } }}>
                 <QuestionCircleOutlined style={{ marginLeft: 8, color: '#999', cursor: 'pointer' }} />
             </Tooltip>
             <Button size="small" onClick={handleGenerateSchedule} style={{ marginLeft: 12 }}>
@@ -165,7 +165,7 @@ export const ItinerarySection = ({ itineraries, onSave, destinationName, spots }
     );
 
     return (
-        <Card title={title} bordered={false}>
+        <Card title={title} variant="borderless">
             <Table
                 bordered
                 dataSource={itineraries}

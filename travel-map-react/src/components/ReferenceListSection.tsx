@@ -75,7 +75,7 @@ export const ReferenceListSection = ({ references, onSave }: ReferenceListSectio
     };
 
     return (
-        <Card title="参考资料" bordered={false}>
+        <Card title="参考资料" variant="borderless">
             <Form form={form} component={false}>
                 <List
                     itemLayout="vertical"

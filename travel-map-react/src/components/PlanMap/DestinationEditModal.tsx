@@ -34,7 +34,7 @@ export const DestinationEditModal: React.FC<DestinationEditModalProps> = ({ open
             open={open}
             onOk={handleOk}
             onCancel={onCancel}
-            destroyOnClose
+            destroyOnHidden
         >
             <Form form={form} layout="vertical">
                 <Form.Item

@@ -199,7 +199,7 @@ export const SpotListSection = ({ spots, onSave, destinationName }: SpotListSect
                     <Select
                         value={val}
                         onChange={(newVal) => handleUpdate(record.id, 'reservation_required', newVal)}
-                        bordered={false}
+                        variant="borderless"
                         style={{ width: 60 }}
                     >
                         <Select.Option value={true}><Tag color="red">是</Tag></Select.Option>
@@ -242,7 +242,7 @@ export const SpotListSection = ({ spots, onSave, destinationName }: SpotListSect
     );
 
     return (
-        <Card title={title} bordered={false}>
+        <Card title={title} variant="borderless">
             <Table
                 bordered
                 dataSource={spots.filter(s => !s.hide_in_list)}

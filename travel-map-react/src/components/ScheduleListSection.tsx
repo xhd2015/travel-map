@@ -68,7 +68,7 @@ export const ScheduleListSection = ({ schedules, onSave }: ScheduleListSectionPr
     );
 
     return (
-        <Card title={title} bordered={false}>
+        <Card title={title} variant="borderless">
             <List
                 itemLayout="vertical"
                 dataSource={schedules}

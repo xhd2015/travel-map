@@ -52,7 +52,7 @@ export const GuideMapSection = ({ images, onSave }: GuideMapSectionProps) => {
     );
 
     return (
-        <Card title={title} bordered={false}>
+        <Card title={title} variant="borderless">
             {images.length === 0 ? (
                 <Empty description="暂无导览图">
                     {UploadButton}

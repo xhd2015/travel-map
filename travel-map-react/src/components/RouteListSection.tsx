@@ -274,7 +274,7 @@ export const RouteListSection = ({ routes, onSave }: RouteListSectionProps) => {
     });
 
     return (
-        <Card title="线路列表" bordered={false}>
+        <Card title="线路列表" variant="borderless">
             <Form form={form} component={false}>
                 <Table
                     components={{

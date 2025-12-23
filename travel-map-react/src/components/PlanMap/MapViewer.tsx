@@ -92,10 +92,19 @@ const MapUpdater = ({ center, zoom }: { center: [number, number], zoom?: number 
     }, [map]);
 
     useEffect(() => {
-        if (zoom) {
-            map.flyTo(center, zoom);
-        } else {
-            map.flyTo(center);
+        const currentCenter = map.getCenter();
+        const dist = currentCenter.distanceTo(L.latLng(center[0], center[1]));
+        const currentZoom = map.getZoom();
+
+        // Only flyTo if distance is meaningful (> 500 meters) or zoom is different
+        // This prevents loops when the update comes from the map itself
+        // Increased threshold to avoid fighting with small drags
+        if (dist > 500 || (zoom !== undefined && zoom !== currentZoom)) {
+            if (zoom) {
+                map.flyTo(center, zoom);
+            } else {
+                map.flyTo(center);
+            }
         }
     }, [center, zoom, map]);
     return null;
@@ -390,7 +399,26 @@ interface MapViewerProps {
     onMapClick?: (lat: number, lng: number) => void;
     provider?: string;
     onProviderChange?: (provider: string) => void;
+    onMapStateChange?: (center: { lat: number, lng: number }, zoom: number) => void;
 }
+
+const MapStateTracker = ({ onMapStateChange }: { onMapStateChange?: (center: { lat: number, lng: number }, zoom: number) => void }) => {
+    const map = useMapEvents({
+        moveend: () => {
+            if (onMapStateChange) {
+                const center = map.getCenter();
+                onMapStateChange({ lat: center.lat, lng: center.lng }, map.getZoom());
+            }
+        },
+        zoomend: () => {
+            if (onMapStateChange) {
+                const center = map.getCenter();
+                onMapStateChange({ lat: center.lat, lng: center.lng }, map.getZoom());
+            }
+        }
+    });
+    return null;
+};
 
 export const MapViewer: React.FC<MapViewerProps> = ({
     config,
@@ -409,7 +437,8 @@ export const MapViewer: React.FC<MapViewerProps> = ({
     isPickingLocation,
     onMapClick,
     provider,
-    onProviderChange
+    onProviderChange,
+    onMapStateChange
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -461,6 +490,7 @@ export const MapViewer: React.FC<MapViewerProps> = ({
                     url={TileProviders[currentProvider].url}
                 />
                 <MapUpdater center={mapCenter} zoom={mapZoom} />
+                <MapStateTracker onMapStateChange={onMapStateChange} />
                 <MapResultFlier target={selectedResult} />
                 <InteractionBridge
                     onAddSpot={onAddSpot}

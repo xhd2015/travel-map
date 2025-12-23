@@ -40,6 +40,14 @@ function DestinationDetail() {
     }
   }, [planId, destId]);
 
+  useEffect(() => {
+    if (config.destination?.name) {
+      document.title = `${config.destination.name}规划详情`;
+    } else {
+      document.title = '目的地规划详情';
+    }
+  }, [config]);
+
   const loadData = async (pId: string, dId: string) => {
     try {
       const [
@@ -86,10 +94,10 @@ function DestinationDetail() {
     <Layout style={{ minHeight: '100vh' }}>
       <Header style={{ display: 'flex', alignItems: 'center', background: '#fff', borderBottom: '1px solid #f0f0f0', padding: '0 24px' }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/plans/${planId}`)} style={{ marginRight: 16 }}>返回目的地列表</Button>
-        <Title level={3} style={{ margin: 0 }}>旅游规划详情</Title>
+        <Title level={3} style={{ margin: 0 }}>{config.destination?.name ? `${config.destination.name}规划详情` : '目的地规划详情'}</Title>
       </Header>
       <Content style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
           <MapSection
             planId={planId}
             destId={destId} // Passed destId
