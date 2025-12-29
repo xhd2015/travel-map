@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Layout, message, Spin } from 'antd';
+import { Layout, Spin } from 'antd';
 import { useParams, useNavigate } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -69,24 +69,14 @@ export default function PlanMap() {
         spots,
         onSaveConfig: async (newConfig) => {
             setConfig(newConfig);
-            try {
-                if (planId && destId) {
-                    await api.saveConfig(planId, destId, newConfig);
-                }
-            } catch (e) {
-                console.error(e);
-                message.error("保存配置失败");
+            if (planId && destId) {
+                await api.saveConfig(planId, destId, newConfig);
             }
         },
         onSaveSpots: async (newSpots) => {
             setSpots(newSpots);
-            try {
-                if (planId && destId) {
-                    await api.saveSpots(planId, destId, newSpots);
-                }
-            } catch (e) {
-                console.error(e);
-                message.error("保存地点失败");
+            if (planId && destId) {
+                await api.saveSpots(planId, destId, newSpots);
             }
         }
     });
@@ -106,7 +96,7 @@ export default function PlanMap() {
     // Debounced save
     const debouncedSaveConfig = useDebounce((newConfig: Config) => {
         if (planId && destId) {
-            api.saveConfig(planId, destId, newConfig).catch(console.error);
+            api.saveConfig(planId, destId, newConfig);
         }
     }, 1000);
 
@@ -136,8 +126,6 @@ export default function PlanMap() {
                     setMapCenter([first.lat, first.lng]);
                 }
             }
-        } catch (e) {
-            console.error("Failed to load data", e);
         } finally {
             setLoading(false);
         }

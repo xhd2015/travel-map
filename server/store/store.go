@@ -1,10 +1,13 @@
 package store
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -33,7 +36,8 @@ type Spot struct {
 	ReservationInfo     string  `json:"reservation_info"`     // 预约信息
 	Lat                 float64 `json:"lat"`
 	Lng                 float64 `json:"lng"`
-	Icon                string  `json:"icon"`         // default, flag, star, etc.
+	Icon                string  `json:"icon"` // default, flag, star, etc.
+	IconBase64          string  `json:"icon_base64,omitempty"`
 	HideInList          bool    `json:"hide_in_list"` // 是否在列表中隐藏
 	Website             string  `json:"website"`      // 官网
 	Rating              float64 `json:"rating"`       // 星级 1-5
@@ -74,13 +78,15 @@ type Reference struct {
 	ID          string `json:"id"`
 	Description string `json:"description"`
 	Link        string `json:"link"`
+	LinkBase64  string `json:"link_base64,omitempty"`
 }
 
 type Config struct {
-	MapImage    string             `json:"map_image"`
-	Destination *DestinationConfig `json:"destination,omitempty"`
-	MapState    *MapState          `json:"map_state,omitempty"`
-	MapProvider string             `json:"map_provider,omitempty"`
+	MapImage       string             `json:"map_image"`
+	MapImageBase64 string             `json:"map_image_base64,omitempty"`
+	Destination    *DestinationConfig `json:"destination,omitempty"`
+	MapState       *MapState          `json:"map_state,omitempty"`
+	MapProvider    string             `json:"map_provider,omitempty"`
 }
 
 type DestinationConfig struct {
@@ -96,8 +102,9 @@ type MapState struct {
 }
 
 type GuideImage struct {
-	ID  string `json:"id"`
-	URL string `json:"url"`
+	ID         string `json:"id"`
+	URL        string `json:"url"`
+	Base64Data string `json:"base64_data,omitempty"`
 	// potentially caption, etc.
 }
 
@@ -114,13 +121,36 @@ type ItineraryItem struct {
 	Reference   string `json:"reference"`
 }
 
+type FullDestination struct {
+	Destination Destination     `json:"destination"`
+	Spots       []Spot          `json:"spots"`
+	Foods       []Food          `json:"foods"`
+	Routes      []Route         `json:"routes"`
+	Questions   []Question      `json:"questions"`
+	References  []Reference     `json:"references"`
+	Config      Config          `json:"config"`
+	GuideImages []GuideImage    `json:"guide_images"`
+	Schedules   []Schedule      `json:"schedules"`
+	Itineraries []ItineraryItem `json:"itineraries"`
+}
+
+type FullPlan struct {
+	Plan         Plan              `json:"plan"`
+	Destinations []FullDestination `json:"destinations"`
+}
+
 // GlobalStore manages plans
 type GlobalStore struct {
-	Dir string
+	Dir       string
+	APIPrefix string
 }
 
 func NewGlobalStore(dir string) *GlobalStore {
-	return &GlobalStore{Dir: dir}
+	return &GlobalStore{Dir: dir, APIPrefix: "/api"} // Default
+}
+
+func (s *GlobalStore) SetAPIPrefix(prefix string) {
+	s.APIPrefix = prefix
 }
 
 func (s *GlobalStore) EnsureDir() error {
@@ -231,6 +261,276 @@ func (s *GlobalStore) DeletePlan(id string) error {
 
 func (s *GlobalStore) GetPlanStore(planID string) *PlanStore {
 	return &PlanStore{Dir: filepath.Join(s.Dir, "plans", planID)}
+}
+
+func (s *GlobalStore) readBase64FromURL(url string) string {
+	dataPrefix := s.APIPrefix
+	if !strings.HasSuffix(dataPrefix, "/") {
+		dataPrefix += "/"
+	}
+	dataPrefix += "data/"
+
+	var relPath string
+	if strings.HasPrefix(url, dataPrefix) {
+		relPath = strings.TrimPrefix(url, dataPrefix)
+	} else if strings.HasPrefix(url, "/data/") {
+		relPath = strings.TrimPrefix(url, "/data/")
+	} else {
+		return ""
+	}
+
+	fullPath := filepath.Join(s.Dir, relPath)
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(data)
+}
+
+// ExportPlans exports specific plans and their data. If planIds is empty, exports all plans.
+func (s *GlobalStore) ExportPlans(planIds []string) ([]FullPlan, error) {
+	plans, err := s.ListPlans()
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a map for faster lookup if planIds are provided
+	allowedIds := make(map[string]bool)
+	for _, id := range planIds {
+		allowedIds[id] = true
+	}
+
+	var fullPlans []FullPlan
+	for _, p := range plans {
+		if len(planIds) > 0 && !allowedIds[p.ID] {
+			continue
+		}
+
+		planStore := s.GetPlanStore(p.ID)
+
+		// Clone plan to avoid modifying original
+		exportedPlan := p
+		exportedPlan.ID = "" // Zero out ID
+
+		fullPlan := FullPlan{Plan: exportedPlan}
+
+		dests, err := planStore.ListDestinations()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, d := range dests {
+			destStore := planStore.GetDestinationStore(d.ID)
+
+			// Load all data
+			spots, _ := destStore.LoadSpots()
+			foods, _ := destStore.LoadFoods()
+			routes, _ := destStore.LoadRoutes()
+			questions, _ := destStore.LoadQuestions()
+			references, _ := destStore.LoadReferences()
+			config, _ := destStore.LoadConfig()
+			images, _ := destStore.LoadGuideImages()
+			schedules, _ := destStore.LoadSchedules()
+			itineraries, _ := destStore.LoadItineraries()
+
+			// Zero out IDs for all sub-items and embed base64
+			d.ID = ""
+			for i := range spots {
+				if spots[i].Icon != "" {
+					b64 := s.readBase64FromURL(spots[i].Icon)
+					if b64 != "" {
+						spots[i].IconBase64 = b64
+						spots[i].Icon = ""
+					}
+				}
+				spots[i].ID = ""
+			}
+			for i := range foods {
+				foods[i].ID = ""
+			}
+			for i := range routes {
+				routes[i].ID = ""
+			}
+			for i := range questions {
+				questions[i].ID = ""
+			}
+			for i := range references {
+				if references[i].Link != "" {
+					b64 := s.readBase64FromURL(references[i].Link)
+					if b64 != "" {
+						references[i].LinkBase64 = b64
+						references[i].Link = ""
+					}
+				}
+				references[i].ID = ""
+			}
+			for i := range images {
+				b64 := s.readBase64FromURL(images[i].URL)
+				if b64 != "" {
+					images[i].Base64Data = b64
+					images[i].URL = ""
+				}
+				images[i].ID = ""
+			}
+
+			if config.MapImage != "" {
+				b64 := s.readBase64FromURL(config.MapImage)
+				if b64 != "" {
+					config.MapImageBase64 = b64
+					config.MapImage = ""
+				}
+			}
+
+			for i := range schedules {
+				schedules[i].ID = ""
+			}
+			for i := range itineraries {
+				itineraries[i].ID = ""
+			}
+
+			fullPlan.Destinations = append(fullPlan.Destinations, FullDestination{
+				Destination: d,
+				Spots:       spots,
+				Foods:       foods,
+				Routes:      routes,
+				Questions:   questions,
+				References:  references,
+				Config:      config,
+				GuideImages: images,
+				Schedules:   schedules,
+				Itineraries: itineraries,
+			})
+		}
+		fullPlans = append(fullPlans, fullPlan)
+	}
+	return fullPlans, nil
+}
+
+// ExportAll exports all plans and their data
+func (s *GlobalStore) ExportAll() ([]FullPlan, error) {
+	return s.ExportPlans(nil)
+}
+
+func (s *GlobalStore) saveBase64Image(planID, destID, base64Data string) (string, error) {
+	if base64Data == "" {
+		return "", nil
+	}
+	data, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return "", err
+	}
+
+	destStore := s.GetPlanStore(planID).GetDestinationStore(destID)
+	if err := destStore.EnsureDir(); err != nil {
+		return "", err
+	}
+	imagesDir := filepath.Join(destStore.Dir, "images")
+	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		return "", err
+	}
+
+	contentType := http.DetectContentType(data)
+	ext := ".png" // Default
+	switch contentType {
+	case "image/jpeg":
+		ext = ".jpg"
+	case "image/png":
+		ext = ".png"
+	case "image/gif":
+		ext = ".gif"
+	case "image/svg+xml":
+		ext = ".svg"
+	}
+
+	filename := fmt.Sprintf("%d-import%s", time.Now().UnixNano(), ext)
+	path := filepath.Join(imagesDir, filename)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return "", err
+	}
+
+	dataPrefix := s.APIPrefix
+	if !strings.HasSuffix(dataPrefix, "/") {
+		dataPrefix += "/"
+	}
+	dataPrefix += "data/"
+
+	return fmt.Sprintf("%splans/%s/destinations/%s/images/%s", dataPrefix, planID, destID, filename), nil
+}
+
+// ImportPlans imports a list of full plans
+func (s *GlobalStore) ImportPlans(plans []FullPlan) error {
+	for _, fp := range plans {
+		// Create new plan
+		newPlan, err := s.CreatePlan(fp.Plan.Name)
+		if err != nil {
+			return err
+		}
+
+		planStore := s.GetPlanStore(newPlan.ID)
+
+		for _, fd := range fp.Destinations {
+			// Create destination
+			newDest, err := planStore.CreateDestination(fd.Destination.Name)
+			if err != nil {
+				return err
+			}
+
+			// Update destination order if needed (CreateDestination sets order to last)
+			if newDest.Order != fd.Destination.Order {
+				newDest.Order = fd.Destination.Order
+				planStore.UpdateDestination(newDest.ID, newDest)
+			}
+
+			destStore := planStore.GetDestinationStore(newDest.ID)
+
+			// Process images before saving metadata
+			for i := range fd.Spots {
+				if fd.Spots[i].IconBase64 != "" {
+					newUrl, err := s.saveBase64Image(newPlan.ID, newDest.ID, fd.Spots[i].IconBase64)
+					if err == nil {
+						fd.Spots[i].Icon = newUrl
+					}
+				}
+			}
+
+			for i := range fd.GuideImages {
+				if fd.GuideImages[i].Base64Data != "" {
+					newUrl, err := s.saveBase64Image(newPlan.ID, newDest.ID, fd.GuideImages[i].Base64Data)
+					if err == nil {
+						fd.GuideImages[i].URL = newUrl
+					}
+				}
+			}
+
+			if fd.Config.MapImageBase64 != "" {
+				newUrl, err := s.saveBase64Image(newPlan.ID, newDest.ID, fd.Config.MapImageBase64)
+				if err == nil {
+					fd.Config.MapImage = newUrl
+				}
+			}
+
+			for i := range fd.References {
+				if fd.References[i].LinkBase64 != "" {
+					newUrl, err := s.saveBase64Image(newPlan.ID, newDest.ID, fd.References[i].LinkBase64)
+					if err == nil {
+						fd.References[i].Link = newUrl
+					}
+				}
+			}
+
+			// Save all data
+			destStore.SaveSpots(fd.Spots)
+			destStore.SaveFoods(fd.Foods)
+			destStore.SaveRoutes(fd.Routes)
+			destStore.SaveQuestions(fd.Questions)
+			destStore.SaveReferences(fd.References)
+			destStore.SaveConfig(fd.Config)
+			destStore.SaveGuideImages(fd.GuideImages)
+			destStore.SaveSchedules(fd.Schedules)
+			destStore.SaveItineraries(fd.Itineraries)
+		}
+	}
+	return nil
 }
 
 // PlanStore manages data for a specific plan (which contains destinations)

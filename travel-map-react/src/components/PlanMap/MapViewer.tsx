@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Button, Popconfirm, Select, message } from 'antd';
+import { Button, Popconfirm, Select } from 'antd';
 import { DeleteOutlined, EditOutlined, CloseOutlined } from '@ant-design/icons';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
@@ -8,6 +8,7 @@ import { api } from '../../api';
 import type { SearchResult } from '../../api';
 import { MapContextMenu } from './MapContextMenu';
 import { DestinationOverlay } from './DestinationOverlay';
+import { useGlobalError } from '../../context/GlobalErrorContext';
 
 // Fix leaflet marker icons imports
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -187,6 +188,7 @@ const InteractionBridge = ({
 
 const MapSearchHandler = ({ query, onResults, provider }: { query: string, onResults: (results: SearchResult[]) => void, provider: string }) => {
     const map = useMap();
+    const { showError } = useGlobalError();
     useEffect(() => {
         if (!query) {
             onResults([]);
@@ -198,7 +200,7 @@ const MapSearchHandler = ({ query, onResults, provider }: { query: string, onRes
                 .then(onResults)
                 .catch(err => {
                     if (err.message === 'AMAP_KEY_MISSING') {
-                        message.error('未配置高德API Key');
+                        showError('未配置高德API Key');
                         onResults([]);
                         return;
                     }
@@ -216,7 +218,7 @@ const MapSearchHandler = ({ query, onResults, provider }: { query: string, onRes
                 .then(onResults)
                 .catch(err => console.error("Search failed", err));
         }
-    }, [query, map, onResults, provider]);
+    }, [query, map, onResults, provider, showError]);
 
     return null;
 };

@@ -1,11 +1,11 @@
 import { useState, useRef } from 'react';
-import { message } from 'antd';
 import { api } from '../api';
 import type { SearchResult } from '../api';
 
 export { type SearchResult };
 
 export const useMapSearch = (provider: string = 'gaode') => {
+    // const { showError } = useGlobalError(); // Not needed if we throw
     const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
     const [searchLoading, setSearchLoading] = useState(false);
     const searchTimeoutRef = useRef<number | null>(null);
@@ -32,13 +32,11 @@ export const useMapSearch = (provider: string = 'gaode') => {
                 return;
             }
             if (error.message === 'AMAP_KEY_MISSING') {
-                message.error('未配置高德API Key');
                 setSearchResults([]);
-                return;
+                throw new Error('未配置高德API Key');
             }
-            console.error("Search failed", error);
-            message.error('搜索失败');
             setSearchResults([]);
+            throw error;
         } finally {
             // Only turn off loading if this is the current request
             if (abortControllerRef.current === controller) {
@@ -81,4 +79,3 @@ export const useMapSearch = (provider: string = 'gaode') => {
         handleSearch
     };
 };
-

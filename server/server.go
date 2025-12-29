@@ -221,7 +221,7 @@ func Static(mux *http.ServeMux, opts StaticOptions) error {
 
 	mux.Handle(assetPrefix, http.StripPrefix(assetPrefix, &mimeTypeHandler{http.FileServer(http.FS(assetsFileSystem))}))
 	// Serve React static files like vite.svg from root or AppPrefix
-	
+
 	rootPrefix := "/"
 	if opts.AppPrefix != "" {
 		rootPrefix = opts.AppPrefix
@@ -265,13 +265,20 @@ func RegisterAPI(mux *http.ServeMux, prefix string) error {
 	if prefix == "" {
 		prefix = "/api"
 	}
+	globalStore.SetAPIPrefix(prefix)
+
 	// Ensure directory exists
 	if err := globalStore.EnsureDir(); err != nil {
 		fmt.Printf("Warning: Failed to ensure data directory: %v\n", err)
 	}
 
 	// Serve user data
-	mux.Handle("/data/", http.StripPrefix("/data/", http.FileServer(http.Dir(globalStore.Dir))))
+	dataPath := prefix
+	if !strings.HasSuffix(dataPath, "/") {
+		dataPath += "/"
+	}
+	dataPath += "data/"
+	mux.Handle(dataPath, http.StripPrefix(dataPath, http.FileServer(http.Dir(globalStore.Dir))))
 
 	// Helper to handle paths with prefix
 	handleFunc := func(path string, handler func(http.ResponseWriter, *http.Request)) {
@@ -294,6 +301,8 @@ func RegisterAPI(mux *http.ServeMux, prefix string) error {
 	handleFunc("/itineraries", handleItineraries)
 	handleFunc("/upload-guide-image", handleUploadGuideImage)
 	handleFunc("/proxy/search", handleProxySearch)
+	handleFunc("/export", handleExport)
+	handleFunc("/import", handleImport)
 	mux.HandleFunc("/ping", handlePing)
 
 	return nil
@@ -301,6 +310,45 @@ func RegisterAPI(mux *http.ServeMux, prefix string) error {
 
 func handlePing(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("pong"))
+}
+
+func handleExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var planIds []string
+	idsParam := r.URL.Query().Get("planIds")
+	if idsParam != "" {
+		planIds = strings.Split(idsParam, ",")
+	}
+
+	fullPlans, err := globalStore.ExportPlans(planIds)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", "attachment; filename=travel-map-export.json")
+	json.NewEncoder(w).Encode(fullPlans)
+}
+
+func handleImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var fullPlans []store.FullPlan
+	if err := json.NewDecoder(r.Body).Decode(&fullPlans); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := globalStore.ImportPlans(fullPlans); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func handlePlans(w http.ResponseWriter, r *http.Request) {
@@ -782,8 +830,13 @@ func handleUploadGuideImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Construct URL
-	// Serving from /data/plans/{planId}/destinations/{destId}/images/{filename}
-	url := fmt.Sprintf("/data/plans/%s/destinations/%s/images/%s", planID, destID, filename)
+	// Serving from {prefix}/data/plans/{planId}/destinations/{destId}/images/{filename}
+	dataPrefix := globalStore.APIPrefix
+	if !strings.HasSuffix(dataPrefix, "/") {
+		dataPrefix += "/"
+	}
+	dataPrefix += "data/"
+	url := fmt.Sprintf("%splans/%s/destinations/%s/images/%s", dataPrefix, planID, destID, filename)
 
 	json.NewEncoder(w).Encode(map[string]string{
 		"url": url,

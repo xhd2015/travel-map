@@ -80,8 +80,6 @@ function DestinationDetail() {
       setGuideImages(fetchedGuideImages || []);
       setSchedules(fetchedSchedules || []);
       setItineraries(fetchedItineraries || []);
-    } catch (e) {
-      console.error("Failed to load data", e);
     } finally {
       setLoading(false);
     }

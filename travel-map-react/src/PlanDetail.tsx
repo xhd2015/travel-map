@@ -47,8 +47,6 @@ export default function PlanDetail() {
       });
 
       setDestinations(sorted);
-    } catch (e) {
-      console.error("Failed to load destinations", e);
     } finally {
       setLoading(false);
     }
@@ -56,26 +54,18 @@ export default function PlanDetail() {
 
   const handleCreate = async () => {
     if (!newDestName || !planId) return;
-    try {
-      const dest = await api.createDestination(planId, newDestName);
-      // Reload to resort
-      loadDestinations();
-      setIsCreating(false);
-      setNewDestName('');
-      navigate(`/plans/${planId}/destinations/${dest.id}`);
-    } catch (e) {
-      console.error("Failed to create destination", e);
-    }
+    const dest = await api.createDestination(planId, newDestName);
+    // Reload to resort
+    loadDestinations();
+    setIsCreating(false);
+    setNewDestName('');
+    navigate(`/plans/${planId}/destinations/${dest.id}`);
   };
 
   const handleDelete = async (destId: string) => {
     if (!planId) return;
-    try {
-      await api.deleteDestination(planId, destId);
-      setDestinations(destinations.filter(d => d.id !== destId));
-    } catch (e) {
-      console.error("Failed to delete destination", e);
-    }
+    await api.deleteDestination(planId, destId);
+    setDestinations(destinations.filter(d => d.id !== destId));
   };
 
   const handleEdit = (dest: Destination) => {
@@ -86,16 +76,12 @@ export default function PlanDetail() {
 
   const handleUpdate = async () => {
     if (!planId) return;
-    try {
-      const values = await editForm.validateFields();
-      if (editingDest) {
-        await api.updateDestination(planId, editingDest.id, values);
-        setIsEditModalOpen(false);
-        setEditingDest(null);
-        loadDestinations();
-      }
-    } catch (e) {
-      console.error("Failed to update destination", e);
+    const values = await editForm.validateFields();
+    if (editingDest) {
+      await api.updateDestination(planId, editingDest.id, values);
+      setIsEditModalOpen(false);
+      setEditingDest(null);
+      loadDestinations();
     }
   };
 

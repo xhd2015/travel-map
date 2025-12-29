@@ -26,9 +26,6 @@ export const GuideMapSection = ({ images, onSave }: GuideMapSectionProps) => {
             onSave([...images, newImage]);
             message.success('图片上传成功');
             setIsModalOpen(false);
-        } catch (error) {
-            console.error(error);
-            message.error('图片上传失败');
         } finally {
             setUploading(false);
         }
