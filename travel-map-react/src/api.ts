@@ -102,7 +102,9 @@ export interface ItineraryItem {
     reference: string;
 }
 
-const API_BASE = '/api';
+const API_BASE = (import.meta as any).env?.VITE_API_PREFIX || '/api';
+export const APP_BASE = (import.meta as any).env?.BASE_URL || '';
+
 
 export interface SearchResult {
     place_id?: string;

@@ -47,13 +47,22 @@ func checkPort(port int) bool {
 	return true
 }
 
-func EnsureFrontendDevServer(ctx context.Context) (chan struct{}, error) {
+func EnsureFrontendDevServer(ctx context.Context, apiPrefix string, appPrefix string) (chan struct{}, error) {
 	// Check if 5173 is running
 	fmt.Println("Frontend dev server (port 5173) not detected. Starting it...")
 	cmd := exec.Command("bun", "run", "dev")
 	cmd.Dir = "travel-map-react/"
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+
+	env := os.Environ()
+	if apiPrefix != "" {
+		env = append(env, "VITE_API_PREFIX="+apiPrefix)
+	}
+	if appPrefix != "" {
+		env = append(env, "VITE_APP_PREFIX="+appPrefix)
+	}
+	cmd.Env = env
 
 	err := cmd.Start()
 	if err != nil {
@@ -86,7 +95,7 @@ func EnsureFrontendDevServer(ctx context.Context) (chan struct{}, error) {
 	return nil, fmt.Errorf("frontend server failed to start within timeout")
 }
 
-func Serve(port int, dev bool) error {
+func Serve(port int, dev bool, apiPrefix string, appPrefix string) error {
 	mux := http.NewServeMux()
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", port),
@@ -114,7 +123,7 @@ func Serve(port int, dev bool) error {
 				}
 			}()
 
-			subProcessDone, err := EnsureFrontendDevServer(ctx)
+			subProcessDone, err := EnsureFrontendDevServer(ctx, apiPrefix, appPrefix)
 			if err != nil {
 				return err
 			}
@@ -131,22 +140,31 @@ func Serve(port int, dev bool) error {
 			return err
 		}
 	} else {
-		err := Static(mux, StaticOptions{})
+		err := Static(mux, StaticOptions{
+			AppPrefix: appPrefix,
+		})
 		if err != nil {
 			return err
 		}
 	}
 
-	err := RegisterAPI(mux)
+	err := RegisterAPI(mux, apiPrefix)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Serving directory preview at http://localhost:%d\n", port)
+	serveURL := fmt.Sprintf("http://localhost:%d", port)
+	if appPrefix != "" {
+		if !strings.HasPrefix(appPrefix, "/") {
+			serveURL += "/"
+		}
+		serveURL += appPrefix
+	}
+	fmt.Printf("Serving directory preview at %s\n", serveURL)
 
 	go func() {
 		time.Sleep(1 * time.Second)
-		web.OpenBrowser(fmt.Sprintf("http://localhost:%d", port))
+		web.OpenBrowser(serveURL)
 	}()
 
 	return server.ListenAndServe()
@@ -169,6 +187,7 @@ func ProxyDev(mux *http.ServeMux) error {
 
 type StaticOptions struct {
 	IndexHtml string // Custom HTML content to serve instead of embedded index.html
+	AppPrefix string // URL prefix for the app
 }
 
 func Static(mux *http.ServeMux, opts StaticOptions) error {
@@ -185,21 +204,36 @@ func Static(mux *http.ServeMux, opts StaticOptions) error {
 	}
 
 	// Serve React assets from /assets/ path with proper MIME types
+	// If AppPrefix is set, assets are served under {AppPrefix}/assets/
+
+	assetPrefix := "/assets/"
+	if opts.AppPrefix != "" {
+		assetPrefix = strings.TrimSuffix(opts.AppPrefix, "/") + "/assets/"
+	}
 
 	// Serve index.css and index.js from assets with pattern matching
-	mux.HandleFunc("/assets/index.css", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(assetPrefix+"index.css", func(w http.ResponseWriter, r *http.Request) {
 		serveAssetWithPattern(w, r, assetsFileSystem, "index.css", "index-", ".css", "text/css")
 	})
-	mux.HandleFunc("/assets/index.js", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(assetPrefix+"index.js", func(w http.ResponseWriter, r *http.Request) {
 		serveAssetWithPattern(w, r, assetsFileSystem, "index.js", "index-", ".js", "application/javascript")
 	})
 
-	mux.Handle("/assets/", http.StripPrefix("/assets/", &mimeTypeHandler{http.FileServer(http.FS(assetsFileSystem))}))
-	// Serve React static files like vite.svg from root
-	mux.Handle("/travel-map.svg", &mimeTypeHandler{http.FileServer(http.FS(reactFileSystem))})
+	mux.Handle(assetPrefix, http.StripPrefix(assetPrefix, &mimeTypeHandler{http.FileServer(http.FS(assetsFileSystem))}))
+	// Serve React static files like vite.svg from root or AppPrefix
+	
+	rootPrefix := "/"
+	if opts.AppPrefix != "" {
+		rootPrefix = opts.AppPrefix
+		if !strings.HasSuffix(rootPrefix, "/") {
+			rootPrefix += "/"
+		}
+	}
+
+	mux.Handle(rootPrefix+"travel-map.svg", &mimeTypeHandler{http.FileServer(http.FS(reactFileSystem))})
 
 	// Serve the main HTML page
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(rootPrefix, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 
 		// Use custom IndexHtml if provided
@@ -227,7 +261,10 @@ func Static(mux *http.ServeMux, opts StaticOptions) error {
 	return nil
 }
 
-func RegisterAPI(mux *http.ServeMux) error {
+func RegisterAPI(mux *http.ServeMux, prefix string) error {
+	if prefix == "" {
+		prefix = "/api"
+	}
 	// Ensure directory exists
 	if err := globalStore.EnsureDir(); err != nil {
 		fmt.Printf("Warning: Failed to ensure data directory: %v\n", err)
@@ -236,20 +273,27 @@ func RegisterAPI(mux *http.ServeMux) error {
 	// Serve user data
 	mux.Handle("/data/", http.StripPrefix("/data/", http.FileServer(http.Dir(globalStore.Dir))))
 
+	// Helper to handle paths with prefix
+	handleFunc := func(path string, handler func(http.ResponseWriter, *http.Request)) {
+		// path is like "/plans"
+		fullPath := prefix + path
+		mux.HandleFunc(fullPath, handler)
+	}
+
 	// API endpoints
-	mux.HandleFunc("/api/plans", handlePlans)
-	mux.HandleFunc("/api/destinations", handleDestinations)
-	mux.HandleFunc("/api/spots", handleSpots)
-	mux.HandleFunc("/api/foods", handleFoods)
-	mux.HandleFunc("/api/routes", handleRoutes)
-	mux.HandleFunc("/api/questions", handleQuestions)
-	mux.HandleFunc("/api/references", handleReferences)
-	mux.HandleFunc("/api/config", handleConfig)
-	mux.HandleFunc("/api/guide-images", handleGuideImages)
-	mux.HandleFunc("/api/schedules", handleSchedules)
-	mux.HandleFunc("/api/itineraries", handleItineraries)
-	mux.HandleFunc("/api/upload-guide-image", handleUploadGuideImage)
-	mux.HandleFunc("/api/proxy/search", handleProxySearch)
+	handleFunc("/plans", handlePlans)
+	handleFunc("/destinations", handleDestinations)
+	handleFunc("/spots", handleSpots)
+	handleFunc("/foods", handleFoods)
+	handleFunc("/routes", handleRoutes)
+	handleFunc("/questions", handleQuestions)
+	handleFunc("/references", handleReferences)
+	handleFunc("/config", handleConfig)
+	handleFunc("/guide-images", handleGuideImages)
+	handleFunc("/schedules", handleSchedules)
+	handleFunc("/itineraries", handleItineraries)
+	handleFunc("/upload-guide-image", handleUploadGuideImage)
+	handleFunc("/proxy/search", handleProxySearch)
 	mux.HandleFunc("/ping", handlePing)
 
 	return nil

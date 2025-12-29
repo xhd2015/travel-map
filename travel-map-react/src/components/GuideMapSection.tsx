@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Button, Row, Col, Empty, message, Upload, Spin, Tooltip, Image } from 'antd';
+import { Card, Button, Row, Col, Empty, message, Tooltip, Image } from 'antd';
 import { PlusOutlined, UploadOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import type { GuideImage } from '../api';
 import { api } from '../api';

@@ -46,7 +46,7 @@ func ServeComponent(port int, opts ServeOptions) error {
 		}
 	}
 
-	err := RegisterAPI(mux)
+	err := RegisterAPI(mux, "")
 	if err != nil {
 		return err
 	}

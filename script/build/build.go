@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/xhd2015/less-gen/flags"
 	"github.com/xhd2015/xgo/support/cmd"
 )
 
@@ -17,6 +18,20 @@ func main() {
 }
 
 func Handle(args []string) error {
+	var apiPrefix string
+	var appPrefix string
+	var remainingArgs []string
+	remainingArgs, err := flags.
+		String("--api-prefix", &apiPrefix).
+		String("--app-prefix", &appPrefix).
+		Parse(args)
+	if err != nil {
+		return err
+	}
+	if len(remainingArgs) > 0 {
+		return fmt.Errorf("unexpected args: %v", remainingArgs)
+	}
+
 	// check if bun installed
 	if _, err := exec.LookPath("bun"); err != nil {
 		return fmt.Errorf("bun is not installed, install it from https://bun.sh/docs/installation")
@@ -31,7 +46,15 @@ func Handle(args []string) error {
 		}
 	}
 
-	err := cmd.Debug().Dir("travel-map-react").Run("bun", "run", "build")
+	env := os.Environ()
+	if apiPrefix != "" {
+		env = append(env, "VITE_API_PREFIX="+apiPrefix)
+	}
+	if appPrefix != "" {
+		env = append(env, "VITE_APP_PREFIX="+appPrefix)
+	}
+
+	err = cmd.Debug().Env(env).Dir("travel-map-react").Run("bun", "run", "build")
 	if err != nil {
 		return err
 	}

@@ -3,10 +3,11 @@ import PlanList from './PlanList';
 import PlanDetail from './PlanDetail';
 import DestinationDetail from './DestinationDetail';
 import PlanMap from './PlanMap';
+import { APP_BASE } from './api';
 
 function App() {
   return (
-    <Router>
+    <Router basename={APP_BASE}>
       <Routes>
         <Route path="/" element={<PlanList />} />
         <Route path="/plans/:planId" element={<PlanDetail />} />

@@ -20,9 +20,15 @@ Subcommands:
 func Run(args []string) error {
 	var devFlag bool
 	var component string
+	var apiPrefix string
+	var appPrefix string
+	var port int
 	args, err := flags.
 		Bool("--dev", &devFlag).
 		String("--component", &component).
+		String("--api-prefix", &apiPrefix).
+		String("--app-prefix", &appPrefix).
+		Int("--port", &port).
 		Help("-h,--help", help).
 		Parse(args)
 	if err != nil {
@@ -38,10 +44,13 @@ func Run(args []string) error {
 		return nil
 	}
 
-	// next port
-	port, err := web.FindAvailablePort(8080, 100)
-	if err != nil {
-		return err
+	if port == 0 {
+		// next port
+		var err error
+		port, err = web.FindAvailablePort(8080, 100)
+		if err != nil {
+			return err
+		}
 	}
 
 	if component != "" {
@@ -68,5 +77,5 @@ func Run(args []string) error {
 		})
 	}
 
-	return server.Serve(port, devFlag)
+	return server.Serve(port, devFlag, apiPrefix, appPrefix)
 }
