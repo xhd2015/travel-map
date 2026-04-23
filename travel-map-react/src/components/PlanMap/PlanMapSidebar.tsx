@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Layout, Input, List, Button, Typography, Spin } from 'antd';
-import { ArrowLeftOutlined, EnvironmentOutlined, LoadingOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
+import { Layout, Input, List, Button, Typography, Spin, Checkbox } from 'antd';
+import { ArrowLeftOutlined, EnvironmentOutlined, LoadingOutlined, ArrowUpOutlined, ArrowDownOutlined, EditOutlined, SaveOutlined, CloseOutlined } from '@ant-design/icons';
 import type { Spot } from '../../api';
 import { ResizableSidebarLayout } from '../../layout/ResizableSidebarLayout';
+import { SeamlessDebouncedInput } from '../common/SeamlessDebouncedInput';
 
 const { Sider } = Layout;
 const { Title } = Typography;
@@ -16,6 +17,7 @@ interface PlanMapSidebarProps {
     onSelectResult: (item: any) => void;
     spots: Spot[];
     onSelectSpot: (spot: Spot) => void;
+    onUpdateSpot: (spot: Spot) => void;
     onReorderSpots: (fromIndex: number, toIndex: number) => void;
     onPickLocation: (spot: Spot) => void;
     pickingLocationSpot: Spot | null;
@@ -31,12 +33,30 @@ export const PlanMapSidebar: React.FC<PlanMapSidebarProps> = ({
     onSelectResult,
     spots,
     onSelectSpot,
+    onUpdateSpot,
     onReorderSpots,
     onPickLocation,
     pickingLocationSpot,
     onCancelPickLocation
 }) => {
     const [width, setWidth] = useState(400);
+    const [editingSpotId, setEditingSpotId] = useState<string | null>(null);
+    const [editingSpotName, setEditingSpotName] = useState('');
+
+    const beginEditSpot = (spot: Spot) => {
+        setEditingSpotId(spot.id);
+        setEditingSpotName(spot.name || '');
+    };
+
+    const cancelEditSpot = () => {
+        setEditingSpotId(null);
+        setEditingSpotName('');
+    };
+
+    const saveEditSpot = (spot: Spot) => {
+        onUpdateSpot({ ...spot, name: editingSpotName.trim() || spot.name });
+        cancelEditSpot();
+    };
 
     return (
         <Sider
@@ -100,7 +120,11 @@ export const PlanMapSidebar: React.FC<PlanMapSidebarProps> = ({
                                             renderItem={(spot, index) => (
                                                 <List.Item
                                                     style={{ cursor: 'pointer' }}
-                                                    onClick={() => onSelectSpot(spot)}
+                                                    onClick={() => {
+                                                        if (editingSpotId !== spot.id) {
+                                                            onSelectSpot(spot);
+                                                        }
+                                                    }}
                                                     actions={[
                                                         <Button
                                                             key="up"
@@ -123,7 +147,42 @@ export const PlanMapSidebar: React.FC<PlanMapSidebarProps> = ({
                                                                 e.stopPropagation();
                                                                 onReorderSpots(index, index + 1);
                                                             }}
-                                                        />
+                                                        />,
+                                                        editingSpotId === spot.id ? (
+                                                            <Button
+                                                                key="save"
+                                                                type="text"
+                                                                size="small"
+                                                                icon={<SaveOutlined />}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    saveEditSpot(spot);
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <Button
+                                                                key="edit"
+                                                                type="text"
+                                                                size="small"
+                                                                icon={<EditOutlined />}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    beginEditSpot(spot);
+                                                                }}
+                                                            />
+                                                        ),
+                                                        editingSpotId === spot.id && (
+                                                            <Button
+                                                                key="cancel"
+                                                                type="text"
+                                                                size="small"
+                                                                icon={<CloseOutlined />}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    cancelEditSpot();
+                                                                }}
+                                                            />
+                                                        )
                                                     ]}
                                                 >
                                                     <List.Item.Meta
@@ -159,9 +218,36 @@ export const PlanMapSidebar: React.FC<PlanMapSidebarProps> = ({
                                                                 })()}
                                                             </div>
                                                         )}
-                                                        title={spot.name}
+                                                        title={editingSpotId === spot.id ? (
+                                                            <div onClick={(e) => e.stopPropagation()}>
+                                                                <SeamlessDebouncedInput
+                                                                    value={editingSpotName}
+                                                                    onChange={setEditingSpotName}
+                                                                    plainWhenBlurred={false}
+                                                                    placeholder="输入标记名称"
+                                                                    style={{ fontWeight: 500, paddingLeft: 0 }}
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            <span style={{ fontWeight: 500 }}>{spot.name}</span>
+                                                        )}
                                                         description={
                                                             <div>
+                                                                <div
+                                                                    style={{ marginBottom: 4 }}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    onMouseDown={(e) => e.stopPropagation()}
+                                                                >
+                                                                    <Checkbox
+                                                                        checked={!spot.hide_in_list}
+                                                                        onChange={(e) => {
+                                                                            e.stopPropagation();
+                                                                            onUpdateSpot({ ...spot, hide_in_list: !e.target.checked });
+                                                                        }}
+                                                                    >
+                                                                        景点
+                                                                    </Checkbox>
+                                                                </div>
                                                                 {pickingLocationSpot?.id === spot.id ? (
                                                                     <Button
                                                                         size="small"
@@ -221,4 +307,3 @@ export const PlanMapSidebar: React.FC<PlanMapSidebarProps> = ({
         </Sider>
     );
 };
-

@@ -6,12 +6,13 @@ interface SeamlessDebouncedInputProps {
     onChange: (value: string) => void;
     textarea?: boolean;
     autoSize?: boolean | object;
+    plainWhenBlurred?: boolean;
     placeholder?: string;
     className?: string;
     style?: React.CSSProperties;
 }
 
-export const SeamlessDebouncedInput = ({ value, onChange, textarea, autoSize, placeholder, className, style }: SeamlessDebouncedInputProps) => {
+export const SeamlessDebouncedInput = ({ value, onChange, textarea, autoSize, plainWhenBlurred = true, placeholder, className, style }: SeamlessDebouncedInputProps) => {
     const [localValue, setLocalValue] = useState(value);
     const [focused, setFocused] = useState(false);
     const timeoutRef = useRef<any>(null);
@@ -34,7 +35,7 @@ export const SeamlessDebouncedInput = ({ value, onChange, textarea, autoSize, pl
 
     const commonStyle: React.CSSProperties = {
         ...style,
-        ...(focused ? {} : {
+        ...((focused || !plainWhenBlurred) ? {} : {
             borderColor: 'transparent',
             backgroundColor: 'transparent',
             boxShadow: 'none',
@@ -72,4 +73,3 @@ export const SeamlessDebouncedInput = ({ value, onChange, textarea, autoSize, pl
         />
     );
 };
-

@@ -10,6 +10,7 @@ const getUrl = (url: string) => {
 export interface Plan {
     id: string;
     name: string;
+    description?: string;
     created_at: string;
 }
 
@@ -88,6 +89,7 @@ export interface Config {
     destination?: DestinationConfig;
     map_state?: MapState;
     map_provider?: string;
+    itinerary_start?: string;
 }
 
 export interface MapState {
@@ -109,10 +111,20 @@ export interface Schedule {
 
 export interface ItineraryItem {
     id: string;
+    day?: string;
+    date?: string;
     time: string;
     activity: string;
     description: string;
     reference: string;
+}
+
+export interface PlanScheduleItem {
+    id: string;
+    date: string;
+    time?: string;
+    title: string;
+    description?: string;
 }
 
 export interface FullDestination {
@@ -307,6 +319,9 @@ export const api = {
         return data.url;
     },
 
+    getPlanSchedule: (planId: string) => get<PlanScheduleItem[]>(`/plan-schedule?planId=${planId}`),
+    savePlanSchedule: (planId: string, items: PlanScheduleItem[]) => postJSON(`/plan-schedule?planId=${planId}`, items),
+
     getSchedules: (planId: string, destId: string) => get<Schedule[]>(`/schedules?planId=${planId}&destId=${destId}`),
     saveSchedules: (planId: string, destId: string, schedules: Schedule[]) => postJSON(`/schedules?planId=${planId}&destId=${destId}`, schedules),
 
@@ -336,4 +351,95 @@ export const api = {
         window.URL.revokeObjectURL(downloadUrl);
     },
     importPlans: (plans: FullPlan[]) => postJSON(`/import`, plans),
+
+    exportPlanZip: async (planId: string, fileName?: string) => {
+        const res = await fetch(getUrl(`/plan-export-zip?planId=${encodeURIComponent(planId)}`));
+        if (!res.ok) {
+            throw new Error(`Failed to export plan zip: ${res.status} ${res.statusText}`);
+        }
+
+        const blob = await res.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = fileName || 'travel-plan.zip';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(downloadUrl);
+    },
+
+    importPlanZip: async (planId: string, file: File) => {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await fetch(getUrl(`/plan-import-zip?planId=${encodeURIComponent(planId)}`), {
+            method: 'POST',
+            body: formData,
+        });
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || `Failed to import plan zip: ${res.status} ${res.statusText}`);
+        }
+    },
+
+    streamAIChat: (planId: string, messages: ChatMessage[], onChunk: (chunk: StreamChunk) => void, signal?: AbortSignal): Promise<void> => {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const res = await fetch(getUrl('/ai/chat'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ planId, messages }),
+                    signal,
+                });
+                if (!res.ok) {
+                    const body = await res.text();
+                    let msg = `AI chat failed: ${res.status}`;
+                    try {
+                        const parsed = JSON.parse(body);
+                        if (parsed.error) msg = parsed.error;
+                    } catch { /* use default msg */ }
+                    reject(new Error(msg));
+                    return;
+                }
+                const reader = res.body?.getReader();
+                if (!reader) {
+                    reject(new Error('No response body'));
+                    return;
+                }
+                const decoder = new TextDecoder();
+                let buffer = '';
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        const jsonStr = line.slice(6).trim();
+                        if (!jsonStr) continue;
+                        try {
+                            const chunk: StreamChunk = JSON.parse(jsonStr);
+                            onChunk(chunk);
+                        } catch { /* skip malformed */ }
+                    }
+                }
+                resolve();
+            } catch (err) {
+                reject(err);
+            }
+        });
+    },
 };
+
+export interface ChatMessage {
+    role: string;
+    content: string;
+}
+
+export interface StreamChunk {
+    type: 'thinking' | 'content' | 'done' | 'error';
+    content?: string;
+    error?: string;
+}

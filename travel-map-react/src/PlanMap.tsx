@@ -189,6 +189,7 @@ export default function PlanMap() {
                 onSelectResult={handleSelectResult}
                 spots={spots}
                 onSelectSpot={handleSelectSpot}
+                onUpdateSpot={handleSaveSpot}
                 onReorderSpots={handleReorderSpots}
                 onPickLocation={handlePickLocation}
                 pickingLocationSpot={pickingLocationSpot}

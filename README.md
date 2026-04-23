@@ -2,6 +2,12 @@
 
 A helper application for planning travel, featuring maps, guide maps, spot lists, route lists, and questions.
 
+# Development
+
+```sh
+go run ./script/dev
+```
+
 ## Project Structure
 
 - `main.go`: Backend entry point.

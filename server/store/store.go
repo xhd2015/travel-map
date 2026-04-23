@@ -12,10 +12,10 @@ import (
 )
 
 type Plan struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	CreatedAt string `json:"created_at"`
-	// Plan might have description etc later
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	CreatedAt   string `json:"created_at"`
 }
 
 type Destination struct {
@@ -87,6 +87,7 @@ type Config struct {
 	Destination    *DestinationConfig `json:"destination,omitempty"`
 	MapState       *MapState          `json:"map_state,omitempty"`
 	MapProvider    string             `json:"map_provider,omitempty"`
+	ItineraryStart string             `json:"itinerary_start,omitempty"`
 }
 
 type DestinationConfig struct {
@@ -115,10 +116,20 @@ type Schedule struct {
 
 type ItineraryItem struct {
 	ID          string `json:"id"`
+	Day         string `json:"day,omitempty"`
+	Date        string `json:"date,omitempty"`
 	Time        string `json:"time"`
 	Activity    string `json:"activity"`
 	Description string `json:"description"`
 	Reference   string `json:"reference"`
+}
+
+type PlanScheduleItem struct {
+	ID          string `json:"id"`
+	Date        string `json:"date"`
+	Time        string `json:"time,omitempty"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
 }
 
 type FullDestination struct {
@@ -235,6 +246,7 @@ func (s *GlobalStore) UpdatePlan(id string, update Plan) error {
 			if update.Name != "" {
 				plans[i].Name = update.Name
 			}
+			plans[i].Description = update.Description
 			return s.SavePlans(plans)
 		}
 	}
@@ -648,6 +660,46 @@ func (s *PlanStore) DeleteDestination(id string) error {
 
 func (s *PlanStore) GetDestinationStore(destID string) *DestinationStore {
 	return &DestinationStore{Dir: filepath.Join(s.Dir, "destinations", destID)}
+}
+
+func (s *PlanStore) loadFile(filename string, v interface{}) error {
+	path := filepath.Join(s.Dir, filename)
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if len(data) == 0 {
+		return nil
+	}
+	return json.Unmarshal(data, v)
+}
+
+func (s *PlanStore) saveFile(filename string, v interface{}) error {
+	if err := s.EnsureDir(); err != nil {
+		return err
+	}
+	path := filepath.Join(s.Dir, filename)
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+func (s *PlanStore) LoadSchedule() ([]PlanScheduleItem, error) {
+	var items []PlanScheduleItem
+	err := s.loadFile("schedule.json", &items)
+	if items == nil {
+		items = []PlanScheduleItem{}
+	}
+	return items, err
+}
+
+func (s *PlanStore) SaveSchedule(items []PlanScheduleItem) error {
+	return s.saveFile("schedule.json", items)
 }
 
 // DestinationStore manages data for a specific destination (was PlanStore)

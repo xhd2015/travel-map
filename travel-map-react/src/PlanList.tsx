@@ -162,10 +162,12 @@ export default function PlanList() {
                             <List.Item>
                                 <Card
                                     hoverable
+                                    onClick={() => navigate(`/plans/${item.id}`)}
+                                    style={{ cursor: 'pointer' }}
                                     actions={[
-                                        <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(item)}>编辑</Button>,
+                                        <Button type="text" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); handleEdit(item); }}>编辑</Button>,
                                         <Popconfirm title="确定删除该计划吗?" onConfirm={() => handleDelete(item.id)} okText="是" cancelText="否">
-                                            <Button type="text" danger icon={<DeleteOutlined />}>删除</Button>
+                                            <Button type="text" danger icon={<DeleteOutlined />} onClick={(e) => e.stopPropagation()}>删除</Button>
                                         </Popconfirm>,
                                         <Button type="link" onClick={() => navigate(`/plans/${item.id}`)}>
                                             进入计划 <RightOutlined />

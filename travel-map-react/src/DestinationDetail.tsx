@@ -19,6 +19,24 @@ import { ReferenceListSection } from './components/ReferenceListSection';
 const { Header, Content, Footer } = Layout;
 const { Title } = Typography;
 
+function migrateLegacyItineraryStart(itineraries: ItineraryItem[], legacyStartDate?: string): ItineraryItem[] {
+  if (!legacyStartDate || itineraries.length === 0) {
+    return itineraries;
+  }
+
+  const hasExplicitDate = itineraries.some((item) => Boolean(item.date?.trim()));
+  if (hasExplicitDate) {
+    return itineraries;
+  }
+
+  const firstDay = itineraries[0].day?.trim() || '第1天';
+  return itineraries.map((item) => (
+    (item.day?.trim() || '第1天') === firstDay
+      ? { ...item, date: legacyStartDate }
+      : item
+  ));
+}
+
 function DestinationDetail() {
   const { planId, destId } = useParams<{ planId: string; destId: string }>();
   const navigate = useNavigate();
@@ -76,10 +94,11 @@ function DestinationDetail() {
       setRoutes(fetchedRoutes || []);
       setQuestions(fetchedQuestions || []);
       setReferences(fetchedReferences || []);
-      setConfig(fetchedConfig || { map_image: '' });
+      const nextConfig = fetchedConfig || { map_image: '' };
+      setConfig(nextConfig);
       setGuideImages(fetchedGuideImages || []);
       setSchedules(fetchedSchedules || []);
-      setItineraries(fetchedItineraries || []);
+      setItineraries(migrateLegacyItineraryStart(fetchedItineraries || [], nextConfig.itinerary_start));
     } finally {
       setLoading(false);
     }

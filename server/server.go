@@ -48,8 +48,8 @@ func checkPort(port int) bool {
 }
 
 func EnsureFrontendDevServer(ctx context.Context, apiPrefix string, appPrefix string) (chan struct{}, error) {
-	// Check if 5173 is running
-	fmt.Println("Frontend dev server (port 5173) not detected. Starting it...")
+	// Check if 35100 is running
+	fmt.Println("Frontend dev server (port 35100) not detected. Starting it...")
 	cmd := exec.Command("bun", "run", "dev")
 	cmd.Dir = "travel-map-react/"
 	cmd.Stdout = os.Stdout
@@ -84,7 +84,7 @@ func EnsureFrontendDevServer(ctx context.Context, apiPrefix string, appPrefix st
 	// Wait for port to be ready
 	fmt.Print("Waiting for frontend server...")
 	for i := 0; i < 30; i++ {
-		if checkPort(5173) {
+		if checkPort(35100) {
 			fmt.Println(" Ready!")
 			return done, nil
 		}
@@ -105,7 +105,7 @@ func Serve(port int, dev bool, apiPrefix string, appPrefix string) error {
 	}
 
 	if dev {
-		if !checkPort(5173) {
+		if !checkPort(35100) {
 			// Create context for managing subprocesses
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -171,7 +171,7 @@ func Serve(port int, dev bool, apiPrefix string, appPrefix string) error {
 }
 
 func ProxyDev(mux *http.ServeMux) error {
-	targetURL, err := url.Parse("http://localhost:5173")
+	targetURL, err := url.Parse("http://localhost:35100")
 	if err != nil {
 		return fmt.Errorf("invalid proxy target: %v", err)
 	}
@@ -297,12 +297,16 @@ func RegisterAPI(mux *http.ServeMux, prefix string) error {
 	handleFunc("/references", handleReferences)
 	handleFunc("/config", handleConfig)
 	handleFunc("/guide-images", handleGuideImages)
+	handleFunc("/plan-schedule", handlePlanSchedule)
 	handleFunc("/schedules", handleSchedules)
 	handleFunc("/itineraries", handleItineraries)
 	handleFunc("/upload-guide-image", handleUploadGuideImage)
 	handleFunc("/proxy/search", handleProxySearch)
 	handleFunc("/export", handleExport)
 	handleFunc("/import", handleImport)
+	handleFunc("/plan-export-zip", handlePlanExportZip)
+	handleFunc("/plan-import-zip", handlePlanImportZip)
+	handleFunc("/ai/chat", handleAIChat)
 	mux.HandleFunc("/ping", handlePing)
 
 	return nil
@@ -348,6 +352,67 @@ func handleImport(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func handlePlanExportZip(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	planID := r.URL.Query().Get("planId")
+	if planID == "" {
+		http.Error(w, "Missing planId", http.StatusBadRequest)
+		return
+	}
+
+	zipData, fileName, err := globalStore.ExportPlanZip(planID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fileName))
+	w.Write(zipData)
+}
+
+func handlePlanImportZip(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	planID := r.URL.Query().Get("planId")
+	if planID == "" {
+		http.Error(w, "Missing planId", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.ParseMultipartForm(200 << 20); err != nil {
+		http.Error(w, "Failed to parse multipart form", http.StatusBadRequest)
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "Missing zip file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	zipData, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, "Failed to read zip file", http.StatusInternalServerError)
+		return
+	}
+
+	if err := globalStore.ImportPlanZip(planID, zipData); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -704,6 +769,37 @@ func handleGuideImages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.SaveGuideImages(images); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func handlePlanSchedule(w http.ResponseWriter, r *http.Request) {
+	s, err := getPlanStore(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if r.Method == http.MethodGet {
+		items, err := s.LoadSchedule()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(items)
+		return
+	}
+	if r.Method == http.MethodPost {
+		var items []store.PlanScheduleItem
+		if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := s.SaveSchedule(items); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
