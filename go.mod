@@ -11,4 +11,4 @@ require (
 
 require github.com/sashabaranov/go-openai v1.41.2 // indirect
 
-replace github.com/xhd2015/dot-pkgs/go-pkgs => /Users/xhd2015/Projects/xhd2015/dot-pkgs/go-pkgs
+replace github.com/xhd2015/dot-pkgs/go-pkgs => /Users/xhd2015/Projects/xhd2015/travel-map/dot-pkgs/go-pkgs

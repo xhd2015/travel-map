@@ -4,6 +4,7 @@
 /maintest
 *.test
 *.out
+*.bin
 
 # Node / React
 node_modules
