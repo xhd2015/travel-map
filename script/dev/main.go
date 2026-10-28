@@ -1,16 +1,32 @@
 package main
 
 import (
-	"fmt"
+	"context"
+	"net/http"
 	"os"
 
-	"travel-map/run"
+	devserver "github.com/xhd2015/dot-pkgs/go-pkgs/dev/server"
+	"travel-map/server"
 )
 
 func main() {
-	err := run.Run([]string{"--dev"})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
+	if err := run(os.Args[1:]); err != nil {
+		devserver.PrintError(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func run(args []string) error {
+	root, err := devserver.FindRoot("travel-map-react/package.json")
+	if err != nil {
+		return err
+	}
+	return devserver.Main(args, devserver.Config{
+		Name: "travel-map", Root: root, BuildPackage: "./script/dev", BackendPort: 8080, FrontendPort: 35100, BrowserPath: "/",
+		WatchDirs: []string{"server", "script/dev"},
+		Frontend:  &devserver.Vite{Dir: "travel-map-react", Install: []string{"bun", "install"}, Command: []string{"bun", "run", "dev", "--"}},
+		BackendHandler: func(_ context.Context, b devserver.Backend) (http.Handler, error) {
+			return server.DevHandler(b.FrontendURL, "")
+		},
+	})
 }
